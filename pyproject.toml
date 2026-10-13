@@ -36,6 +36,9 @@ dev = [
     "pytest-asyncio==1.4.0",
     "ruff==0.17.0",
 ]
+local-models = [
+    "sentence-transformers==4.1.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*"]

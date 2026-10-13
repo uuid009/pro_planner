@@ -1,4 +1,4 @@
-"""上传登记。解析和向量索引在后续阶段执行。"""
+"""上传登记。解析和向量索引见 app.rag.service。"""
 
 import hashlib
 import logging

@@ -1,4 +1,4 @@
-"""FastAPI 入口。Phase 0 只提供应用与数据库健康检查。"""
+"""FastAPI 入口。"""
 
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,7 +11,9 @@ from app import __version__
 from app.api.errors import register_exception_handlers
 from app.api.routes_documents import router as documents_router
 from app.api.routes_projects import router as projects_router
+from app.api.routes_retrieval import router as retrieval_router
 from app.config import get_settings
+from app.models.gateway import probe
 
 
 @asynccontextmanager
@@ -26,6 +28,7 @@ app = FastAPI(title="EnterprisePlan AI", version=__version__, lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(projects_router)
 app.include_router(documents_router)
+app.include_router(retrieval_router)
 
 
 @app.get("/health")
@@ -64,6 +67,7 @@ def _health_payload(settings, database: str, pgvector_version: str | None, error
         "embedding_mock": settings.embedding_mock,
         "mock_mode": settings.mock_mode,
         "embedding_dimension": settings.embedding_dimension,
+        "llm_ready": probe(settings)["ready"] if not settings.llm_mock else False,
         "app_env": settings.app_env,
     }
     if error:

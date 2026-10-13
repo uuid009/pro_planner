@@ -1,0 +1,3 @@
+{"id": "rag-001", "query": "一期系统上线", "relevant_terms": ["一期系统上线"], "notes": "应用合成项目书验证 Recall@K"}
+{"id": "rag-002", "query": "不得凭空编造预算", "relevant_terms": ["预算"], "notes": "制度条款应能被关键词补充检索命中"}
+{"id": "rag-003", "query": "策划专责", "relevant_terms": ["策划专责"], "notes": "XLSX 表格行需保留表头与角色"}

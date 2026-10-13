@@ -26,6 +26,27 @@ def test_local_ollama_settings_are_accepted():
     assert settings.embedding_dimension == 1024
 
 
+def test_vllm_and_local_embedding_settings_are_accepted():
+    settings = Settings(
+        **_base(
+            llm_provider="openai_compatible",
+            llm_base_url="http://127.0.0.1:8001/v1",
+            llm_model="Qwen3.8-27B-FP8",
+            embedding_provider="local",
+            embedding_model="models/bge-m3",
+            embedding_base_url="http://unused.invalid",
+        )
+    )
+    assert settings.llm_provider == "openai_compatible"
+    assert settings.embedding_provider == "local"
+    assert settings.mock_mode is False
+
+
+def test_llm_provider_local_is_rejected():
+    with pytest.raises(ValidationError, match="openai_compatible"):
+        Settings(**_base(llm_provider="local"))
+
+
 def test_explicit_mock_provider_is_visible():
     settings = Settings(**_base(llm_provider="mock", embedding_provider="mock"))
     assert settings.llm_mock is True

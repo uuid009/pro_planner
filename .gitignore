@@ -10,6 +10,7 @@ dist/
 build/
 data/uploads/
 data/artifacts/
+/models/
 
 # Object file
 *.o

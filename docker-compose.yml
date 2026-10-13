@@ -22,6 +22,7 @@ services:
       - .env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-mydb}
+      # 容器默认走 Compose 的 ollama profile。本机开发请用 .env 指向宿主机 vLLM。
       LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
       LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       LLM_MODEL: ${LLM_MODEL:-qwen2.5:7b}

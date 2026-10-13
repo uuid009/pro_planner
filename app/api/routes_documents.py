@@ -2,13 +2,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.db.models import Document
+from app.db.models import Document, DocumentChunk
 from app.db.session import get_db
+from app.rag.service import index_document, index_status_for, latest_version
 from app.services.document_service import register_upload
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -24,13 +25,29 @@ class DocumentOut(BaseModel):
     created_by: str
     version_number: int
     validity_status: str
+    chunk_count: int = 0
+    index_status: str = "pending"
     duplicate: bool = False
 
     model_config = {"from_attributes": True}
 
 
-def _to_out(document: Document, duplicate: bool = False) -> DocumentOut:
-    version = max(document.versions, key=lambda item: item.version_number)
+class IndexOut(BaseModel):
+    document_id: UUID
+    version_id: UUID
+    version_number: int
+    chunk_count: int
+    index_status: str
+    embedding_provider: str
+    embedding_mock: bool
+
+
+def _to_out(
+    document: Document,
+    chunk_count: int = 0,
+    duplicate: bool = False,
+) -> DocumentOut:
+    version = latest_version(document)
     return DocumentOut(
         id=document.id,
         filename=document.filename,
@@ -41,8 +58,30 @@ def _to_out(document: Document, duplicate: bool = False) -> DocumentOut:
         created_by=document.created_by,
         version_number=version.version_number,
         validity_status=version.validity_status,
+        chunk_count=chunk_count,
+        index_status=index_status_for(chunk_count),
         duplicate=duplicate,
     )
+
+
+def _chunk_counts(db: Session, version_ids: list[UUID]) -> dict[UUID, int]:
+    if not version_ids:
+        return {}
+    rows = db.execute(
+        select(DocumentChunk.document_version_id, func.count())
+        .where(DocumentChunk.document_version_id.in_(version_ids))
+        .group_by(DocumentChunk.document_version_id)
+    ).all()
+    return {version_id: int(count) for version_id, count in rows}
+
+
+def _load_document(db: Session, document_id: UUID) -> Document:
+    loaded = db.scalar(
+        select(Document).options(selectinload(Document.versions)).where(Document.id == document_id)
+    )
+    if loaded is None:
+        raise AppError(404, "document_not_found", "文档不存在")
+    return loaded
 
 
 @router.post("/upload", response_model=DocumentOut)
@@ -67,13 +106,8 @@ async def upload_document(
             "相同内容的文件已存在，未重复入库",
             {"document_id": str(document.id)},
         )
-    db.refresh(document)
-    document.versions  # loaded by refresh? relationship may be expired
-    loaded = db.scalar(
-        select(Document).options(selectinload(Document.versions)).where(Document.id == document.id)
-    )
-    assert loaded is not None
-    return _to_out(loaded)
+    loaded = _load_document(db, document.id)
+    return _to_out(loaded, chunk_count=0)
 
 
 @router.get("", response_model=list[DocumentOut])
@@ -87,4 +121,15 @@ def list_documents(
         stmt = stmt.where(Document.project_id == project_id)
     if document_type is not None:
         stmt = stmt.where(Document.document_type == document_type)
-    return [_to_out(document) for document in db.scalars(stmt)]
+    documents = list(db.scalars(stmt))
+    version_ids = [latest_version(document).id for document in documents]
+    counts = _chunk_counts(db, version_ids)
+    return [
+        _to_out(document, chunk_count=counts.get(latest_version(document).id, 0))
+        for document in documents
+    ]
+
+
+@router.post("/{document_id}/index", response_model=IndexOut)
+def index_uploaded_document(document_id: UUID, db: Session = Depends(get_db)):
+    return index_document(db, get_settings(), document_id)

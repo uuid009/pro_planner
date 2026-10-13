@@ -12,7 +12,10 @@ from app.api.errors import register_exception_handlers
 from app.api.routes_documents import router as documents_router
 from app.api.routes_projects import router as projects_router
 from app.api.routes_retrieval import router as retrieval_router
+from app.api.routes_workflows import router as workflows_router
 from app.config import get_settings
+from app.graph.persistence import checkpointer_status, close_checkpointer, init_checkpointer
+from app.graph.workflow import reset_compiled_graph
 from app.models.gateway import probe
 
 
@@ -21,7 +24,10 @@ async def lifespan(_app: FastAPI):
     settings = get_settings()
     Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     Path(settings.artifact_dir).mkdir(parents=True, exist_ok=True)
+    init_checkpointer(settings.database_url)
     yield
+    reset_compiled_graph()
+    close_checkpointer()
 
 
 app = FastAPI(title="EnterprisePlan AI", version=__version__, lifespan=lifespan)
@@ -29,6 +35,7 @@ register_exception_handlers(app)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(retrieval_router)
+app.include_router(workflows_router)
 
 
 @app.get("/health")
@@ -68,6 +75,7 @@ def _health_payload(settings, database: str, pgvector_version: str | None, error
         "mock_mode": settings.mock_mode,
         "embedding_dimension": settings.embedding_dimension,
         "llm_ready": probe(settings)["ready"] if not settings.llm_mock else False,
+        "checkpointer": checkpointer_status(),
         "app_env": settings.app_env,
     }
     if error:

@@ -1,6 +1,6 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 2**：文档解析、结构切分、embedding 入库、混合检索（全文 + 向量 + RRF + 可选 reranker）和可追溯引用。LangGraph 工作流、人工审核、导出和界面尚未实现。
+本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 3**：在 Phase 2 的检索之上，用 LangGraph 跑通分析、检索、项目书、任务计划、规则校验、审核和有限次修订，并在人工审核节点暂停。恢复、分叉、导出和界面尚未实现。
 
 规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
@@ -24,7 +24,7 @@ cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/python -m pytest
 ```
 
-最近一次：`45 passed`（`algo_infer`，Python 3.11，约 3.3s）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 集成测试强制 `embedding_provider=mock`，不加载 BGE、不调用 vLLM。
+最近一次：`60 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
 
 本机 CUDA 12.4 的 nvcc 无法编译 FlashInfer sampling（不支持 `--compress-mode`）。启动脚本已设置 `VLLM_USE_FLASHINFER_SAMPLER=0`。
 
@@ -62,8 +62,13 @@ cd /data/zch/workspace/pro_planner
 - `POST /api/documents/upload`，`GET /api/documents`
 - `POST /api/documents/{document_id}/index`
 - `POST /api/retrieval/search`
+- `POST /api/projects/{project_id}/runs`
+- `GET /api/runs/{run_id}`
+- `GET /api/runs/{run_id}/events`
 
 上传文件按 SHA-256 去重，存储名使用随机 UUID，数据库只保存相对路径。重复索引会替换该版本下的旧 chunk。
+
+工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。`thread_id` 与业务 `run_id` 分开。检查点能恢复执行位置，但重放会再次调用模型，不能保证输出逐字一致。人工恢复和从检查点分叉属于 Phase 4。批准后的文档导出属于 Phase 5，当前批准只把状态记为 `approved_pending_export`。
 
 数据库迁移：
 
@@ -89,7 +94,7 @@ flowchart LR
 
 ## 尚未完成
 
-Phase 3 起才会加入 LangGraph Checkpointer、各 Agent、人工审核、导出和 Streamlit 界面。Docker Compose 中的 `ui` 服务要等页面落地后才能运行。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。
+Phase 4 才会提供 `interrupt` 之后的恢复接口、检查点历史和分支。Phase 5 才导出 DOCX/XLSX 并做 Streamlit 界面。Docker Compose 中的 `ui` 服务要等页面落地后才能运行。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。
 
 ## 隐私
 

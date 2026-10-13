@@ -52,8 +52,11 @@ def common_document_filters(
     document_type: str | None,
     document_ids: list[UUID] | None,
     validity_status: str,
+    libraries: list[str] | None = None,
 ):
     filters = [DocumentVersion.validity_status == validity_status]
+    if libraries is not None:
+        filters.append(Document.library.in_(libraries))
     if project_id is not None:
         filters.append(Document.project_id == project_id)
     if document_type is not None:
@@ -72,6 +75,7 @@ def lexical_search(
     document_type: str | None = None,
     document_ids: list[UUID] | None = None,
     validity_status: str = "active",
+    libraries: list[str] | None = None,
 ) -> list[tuple[DocumentChunk, float]]:
     terms = extract_terms(query)
     if not terms:
@@ -81,6 +85,7 @@ def lexical_search(
         document_type=document_type,
         document_ids=document_ids,
         validity_status=validity_status,
+        libraries=libraries,
     )
     ts_query = func.plainto_tsquery("simple", query)
     like_clauses = [

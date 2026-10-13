@@ -18,12 +18,14 @@ def vector_search(
     document_type: str | None = None,
     document_ids: list[UUID] | None = None,
     validity_status: str = "active",
+    libraries: list[str] | None = None,
 ) -> list[tuple[DocumentChunk, float]]:
     filters = common_document_filters(
         project_id=project_id,
         document_type=document_type,
         document_ids=document_ids,
         validity_status=validity_status,
+        libraries=libraries,
     )
     distance = DocumentChunk.embedding.cosine_distance(query_vector)
     stmt = (

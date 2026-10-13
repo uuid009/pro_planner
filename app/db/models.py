@@ -29,6 +29,42 @@ def _uuid() -> uuid.UUID:
     return uuid.uuid4()
 
 
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "department IN ('algorithm', 'framework', 'testing')",
+            name="ck_users_department",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=_uuid)
+    username: Mapped[str] = mapped_column(String(32), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(String(200), nullable=False)
+    department: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    sessions: Mapped[list["AuthSession"]] = relationship(back_populates="user")
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=_uuid)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    user: Mapped[User] = relationship(back_populates="sessions")
+
+
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
@@ -60,6 +96,12 @@ class Project(Base):
 
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        CheckConstraint(
+            "library IN ('public', 'algorithm', 'framework', 'testing')",
+            name="ck_documents_library",
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=_uuid)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -73,6 +115,7 @@ class Document(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    library: Mapped[str] = mapped_column(String(32), nullable=False, default="public", server_default="public")
 
     project: Mapped[Project | None] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")
@@ -151,6 +194,8 @@ class WorkflowRun(Base):
     )
     parent_checkpoint_id: Mapped[str | None] = mapped_column(String(128))
     branch_label: Mapped[str | None] = mapped_column(String(100))
+    owner_username: Mapped[str | None] = mapped_column(String(32))
+    owner_department: Mapped[str | None] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     model_name: Mapped[str | None] = mapped_column(String(200))
     prompt_version: Mapped[str | None] = mapped_column(String(64))

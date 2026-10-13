@@ -38,3 +38,4 @@ class WorkflowState(TypedDict, total=False):
     node_events: Annotated[list[dict[str, Any]], operator.add]
     model_metadata: Annotated[dict[str, Any], merge_dicts]
     prompt_version: str
+    visible_libraries: list[str]

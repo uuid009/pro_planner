@@ -28,7 +28,7 @@ cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/python -m pytest
 ```
 
-最近一次：`66 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
+最近一次：`69 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
 
 本机 CUDA 12.4 的 nvcc 无法编译 FlashInfer sampling（不支持 `--compress-mode`）。启动脚本已设置 `VLLM_USE_FLASHINFER_SAMPLER=0`。
 
@@ -119,3 +119,5 @@ Docker Compose 里的 `ui` 服务会启动上述 Streamlit 入口。本机未安
 ## 隐私
 
 不要上传未经授权的内部、涉密或个人敏感数据。日志不输出完整原文和密钥。
+
+用户分属算法组、框架组、测试组。创建用户时必须选择部门。上传只能进入本部门或公共资料库，不能指定其他部门。文档列表、检索，以及登录后启动的工作流检索，只使用本部门和公共资料库。其他部门的资料不会出现在列表或检索结果里。密码保存为慢哈希，登录令牌只保存摘要。这仍是本地演示账号，不是生产身份认证。

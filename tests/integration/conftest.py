@@ -38,6 +38,12 @@ def client(tmp_path):
 
     app.dependency_overrides[get_db] = override_db
     with TestClient(app) as test_client:
+        registered = test_client.post(
+            "/api/auth/register",
+            json={"username": "algo-user", "password": "password123", "department": "algorithm"},
+        )
+        assert registered.status_code == 201, registered.text
+        test_client.headers["Authorization"] = f"Bearer {registered.json()['token']}"
         yield test_client
     app.dependency_overrides.clear()
     settings.upload_dir = original_upload_dir

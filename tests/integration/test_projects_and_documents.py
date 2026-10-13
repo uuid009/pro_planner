@@ -90,7 +90,8 @@ def test_upload_registers_version_and_rejects_duplicates(client):
     assert body["document_type"] == "pdf"
     assert body["version_number"] == 1
     assert body["validity_status"] == "active"
-    assert body["created_by"] == "demo-user"
+    assert body["created_by"] == "algo-user"
+    assert body["library"] == "algorithm"
     assert ".." not in body["relative_path"]
     assert body["filename"] == "方案.pdf"
 

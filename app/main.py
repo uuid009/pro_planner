@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api.errors import register_exception_handlers
+from app.api.routes_auth import router as auth_router
 from app.api.routes_documents import router as documents_router
 from app.api.routes_projects import router as projects_router
 from app.api.routes_retrieval import router as retrieval_router
@@ -32,6 +33,7 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="EnterprisePlan AI", version=__version__, lifespan=lifespan)
 register_exception_handlers(app)
+app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(documents_router)
 app.include_router(retrieval_router)

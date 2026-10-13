@@ -4,7 +4,10 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
+from app.authz import visible_libraries
 from app.config import get_settings
+from app.db.models import User
 from app.db.session import get_db
 from app.rag.schemas import EvidenceItem
 from app.rag.service import hybrid_search
@@ -37,7 +40,11 @@ class SearchResponse(BaseModel):
 
 
 @router.post("/search", response_model=SearchResponse)
-def search_documents(payload: SearchRequest, db: Session = Depends(get_db)):
+def search_documents(
+    payload: SearchRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     settings = get_settings()
     items = hybrid_search(
         db,
@@ -47,6 +54,7 @@ def search_documents(payload: SearchRequest, db: Session = Depends(get_db)):
         document_type=payload.document_type,
         document_ids=payload.document_ids,
         validity_status=payload.validity_status,
+        libraries=visible_libraries(user.department),
     )
     return SearchResponse(
         query=payload.query.strip(),

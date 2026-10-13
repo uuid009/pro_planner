@@ -3,12 +3,18 @@
 from __future__ import annotations
 
 import os
+from contextvars import ContextVar
 from typing import Any
 from uuid import UUID
 
 import httpx
 
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
+_token: ContextVar[str | None] = ContextVar("api_token", default=None)
+
+
+def bind_token(token: str | None) -> None:
+    _token.set(token)
 
 
 class ApiError(Exception):
@@ -24,8 +30,12 @@ def api_base_url() -> str:
 
 
 def request(method: str, path: str, **kwargs: Any) -> Any:
+    headers = dict(kwargs.pop("headers", None) or {})
+    token = _token.get()
+    if token and "Authorization" not in headers:
+        headers["Authorization"] = f"Bearer {token}"
     with httpx.Client(base_url=api_base_url(), timeout=120) as client:
-        response = client.request(method, path, **kwargs)
+        response = client.request(method, path, headers=headers, **kwargs)
     if response.status_code >= 400:
         try:
             payload = response.json()
@@ -36,6 +46,18 @@ def request(method: str, path: str, **kwargs: Any) -> Any:
     if "application/json" in content_type:
         return response.json()
     return response.content
+
+
+def register_user(username: str, password: str, department: str) -> dict:
+    return request(
+        "POST",
+        "/api/auth/register",
+        json={"username": username, "password": password, "department": department},
+    )
+
+
+def login_user(username: str, password: str) -> dict:
+    return request("POST", "/api/auth/login", json={"username": username, "password": password})
 
 
 def list_projects() -> list[dict]:
@@ -87,8 +109,15 @@ def list_documents(project_id: UUID | str | None = None) -> list[dict]:
     return request("GET", "/api/documents", params=params)
 
 
-def upload_document(filename: str, content: bytes, project_id: UUID | str | None) -> dict:
-    data = {} if project_id is None else {"project_id": str(project_id)}
+def upload_document(
+    filename: str,
+    content: bytes,
+    project_id: UUID | str | None,
+    library: str = "department",
+) -> dict:
+    data = {"library": library}
+    if project_id is not None:
+        data["project_id"] = str(project_id)
     return request(
         "POST",
         "/api/documents/upload",

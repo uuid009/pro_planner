@@ -64,6 +64,8 @@ def register_upload(
     filename: str,
     content: bytes,
     project_id: UUID | None,
+    created_by: str,
+    library: str,
 ) -> tuple[Document, bool]:
     original_name = Path(filename).name
     if not original_name or original_name in {".", ".."}:
@@ -94,7 +96,8 @@ def register_upload(
         sha256=digest,
         relative_path=relative_path,
         project_id=project_id,
-        created_by=settings.demo_user_id,
+        created_by=created_by,
+        library=library,
     )
     db.add(document)
     db.flush()

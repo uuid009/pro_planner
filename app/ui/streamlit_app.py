@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.authz import DEPARTMENT_LABELS, LIBRARY_LABELS
 from app.ui.api_client import (
     ApiError,
     api_base_url,
+    bind_token,
     compare_artifacts,
     create_project,
     download_artifact,
@@ -19,6 +21,8 @@ from app.ui.api_client import (
     list_events,
     list_projects,
     list_runs,
+    login_user,
+    register_user,
     resume_run,
     review,
     search_evidence,
@@ -29,9 +33,26 @@ from app.ui.api_client import (
 
 def main() -> None:
     st.set_page_config(page_title="EnterprisePlan AI", layout="wide")
+    bind_token(st.session_state.get("token"))
     st.sidebar.title("EnterprisePlan AI")
     st.sidebar.caption(f"API：{api_base_url()}")
-    st.sidebar.caption("审核人是本地演示用户，不是生产身份认证。")
+    if not st.session_state.get("token"):
+        try:
+            _account()
+        except ApiError as exc:
+            st.error(f"{exc}（HTTP {exc.status_code}）")
+        except Exception as exc:
+            st.error(f"无法连接 API：{type(exc).__name__}")
+        return
+    user = st.session_state.get("user") or {}
+    st.sidebar.caption(
+        f"{user.get('username', '')} · {DEPARTMENT_LABELS.get(user.get('department', ''), '')}"
+    )
+    st.sidebar.caption("审核记录仍使用本地演示身份，不是生产身份认证。")
+    if st.sidebar.button("退出登录"):
+        st.session_state.clear()
+        bind_token(None)
+        st.rerun()
     page = st.sidebar.radio(
         "页面",
         ["项目工作台", "知识库", "人工审核", "执行历史", "产物与版本"],
@@ -46,9 +67,47 @@ def main() -> None:
     try:
         pages[page]()
     except ApiError as exc:
+        if exc.status_code == 401:
+            st.session_state.pop("token", None)
+            st.session_state.pop("user", None)
+            bind_token(None)
         st.error(f"{exc}（HTTP {exc.status_code}）")
     except Exception as exc:
         st.error(f"无法连接 API：{type(exc).__name__}")
+
+
+def _account() -> None:
+    st.header("登录")
+    st.caption("创建用户时必须选择部门。登录后只能查看本部门和公共资料库。")
+    login_tab, register_tab = st.tabs(["登录", "创建用户"])
+    with login_tab:
+        with st.form("login"):
+            username = st.text_input("用户名")
+            password = st.text_input("密码", type="password")
+            submitted = st.form_submit_button("登录")
+        if submitted:
+            result = login_user(username, password)
+            _store_session(result)
+    with register_tab:
+        with st.form("register"):
+            username = st.text_input("新用户名")
+            password = st.text_input("密码", type="password")
+            department = st.selectbox(
+                "部门",
+                list(DEPARTMENT_LABELS),
+                format_func=lambda key: DEPARTMENT_LABELS[key],
+            )
+            submitted = st.form_submit_button("创建并登录")
+        if submitted:
+            result = register_user(username, password, department)
+            _store_session(result)
+
+
+def _store_session(result: dict) -> None:
+    st.session_state["token"] = result["token"]
+    st.session_state["user"] = result["user"]
+    bind_token(result["token"])
+    st.rerun()
 
 
 def _workspace() -> None:
@@ -93,9 +152,13 @@ def _knowledge() -> None:
     st.header("知识库")
     project_id = _select_project()
     uploaded = st.file_uploader("上传 PDF、DOCX 或 XLSX", type=["pdf", "docx", "xlsx"])
+    library_choice = st.radio("上传到", ["本部门", "公共资料库"], horizontal=True)
     if uploaded is not None and st.button("上传"):
-        document = upload_document(uploaded.name, uploaded.getvalue(), project_id)
-        st.success(f"已登记 {document['filename']}，版本 {document['version_number']}")
+        library = "department" if library_choice == "本部门" else "public"
+        document = upload_document(uploaded.name, uploaded.getvalue(), project_id, library)
+        st.success(
+            f"已登记 {document['filename']} 到 {LIBRARY_LABELS.get(document['library'], document['library'])}"
+        )
     documents = list_documents(project_id)
     if documents:
         st.dataframe(
@@ -103,6 +166,7 @@ def _knowledge() -> None:
                 {
                     "id": item["id"],
                     "文件": item["filename"],
+                    "资料库": LIBRARY_LABELS.get(item.get("library"), item.get("library")),
                     "类型": item["document_type"],
                     "版本": item["version_number"],
                     "有效性": item["validity_status"],

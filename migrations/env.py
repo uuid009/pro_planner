@@ -6,6 +6,7 @@ from alembic import context
 from app.db.base import Base
 from app.db.models import (  # noqa: F401
     AgentEvent,
+    AuthSession,
     ApprovalRecord,
     ArtifactVersion,
     Document,
@@ -14,6 +15,7 @@ from app.db.models import (  # noqa: F401
     EvidenceLink,
     Project,
     ProjectTask,
+    User,
     WorkflowRun,
 )
 from app.db.session import to_sqlalchemy_url

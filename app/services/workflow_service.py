@@ -12,15 +12,22 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
+from app.authz import PUBLIC_LIBRARY, visible_libraries
 from app.config import get_settings
-from app.db.models import AgentEvent, ApprovalRecord, Project, WorkflowRun
+from app.db.models import AgentEvent, ApprovalRecord, Project, User, WorkflowRun
 from app.graph.runtime import bind_db, persist_node_events, unbind_db
 from app.graph.state import PROMPT_VERSION
 from app.graph.workflow import get_compiled_graph
 from app.services.artifact_service import persist_approved_exports
 
 
-def start_run(db: Session, project_id: UUID, user_request: str, deliverables: list[str]) -> WorkflowRun:
+def start_run(
+    db: Session,
+    project_id: UUID,
+    user_request: str,
+    deliverables: list[str],
+    user: User | None = None,
+) -> WorkflowRun:
     project = db.get(Project, project_id)
     if project is None:
         raise AppError(404, "project_not_found", "项目不存在")
@@ -29,6 +36,8 @@ def start_run(db: Session, project_id: UUID, user_request: str, deliverables: li
         id=uuid4(),
         project_id=project.id,
         thread_id=secrets.token_hex(16),
+        owner_username=user.username if user else None,
+        owner_department=user.department if user else None,
         status="running",
         model_name="mock" if settings.llm_mock else settings.llm_model,
         prompt_version=PROMPT_VERSION,
@@ -46,7 +55,17 @@ def start_run(db: Session, project_id: UUID, user_request: str, deliverables: li
     config = {"configurable": {"thread_id": run.thread_id}}
     bind_db(db)
     try:
-        graph.invoke(_initial_state(run, project, user_request, deliverables, settings), config)
+        graph.invoke(
+            _initial_state(
+                run,
+                project,
+                user_request,
+                deliverables,
+                settings,
+                visible_libraries(user.department) if user else [PUBLIC_LIBRARY],
+            ),
+            config,
+        )
     except Exception as exc:
         run.status = "failed"
         run.error_summary = type(exc).__name__
@@ -67,27 +86,28 @@ def start_run(db: Session, project_id: UUID, user_request: str, deliverables: li
     return run
 
 
-def get_run(db: Session, run_id: UUID) -> WorkflowRun:
+def get_run(db: Session, run_id: UUID, user: User | None = None) -> WorkflowRun:
     run = db.get(WorkflowRun, run_id)
-    if run is None:
+    if run is None or not _can_read_run(run, user):
         raise AppError(404, "run_not_found", "工作流运行不存在")
     return run
 
 
-def list_project_runs(db: Session, project_id: UUID) -> list[WorkflowRun]:
+def list_project_runs(db: Session, project_id: UUID, user: User | None = None) -> list[WorkflowRun]:
     if db.get(Project, project_id) is None:
         raise AppError(404, "project_not_found", "项目不存在")
-    return list(
-        db.scalars(
-            select(WorkflowRun)
-            .where(WorkflowRun.project_id == project_id)
-            .order_by(WorkflowRun.created_at.desc())
+    stmt = select(WorkflowRun).where(WorkflowRun.project_id == project_id)
+    if user is None:
+        stmt = stmt.where(WorkflowRun.owner_department.is_(None))
+    else:
+        stmt = stmt.where(
+            (WorkflowRun.owner_department.is_(None)) | (WorkflowRun.owner_department == user.department)
         )
-    )
+    return list(db.scalars(stmt.order_by(WorkflowRun.created_at.desc())))
 
 
-def list_events(db: Session, run_id: UUID) -> list[AgentEvent]:
-    get_run(db, run_id)
+def list_events(db: Session, run_id: UUID, user: User | None = None) -> list[AgentEvent]:
+    get_run(db, run_id, user)
     return list(
         db.scalars(
             select(AgentEvent).where(AgentEvent.run_id == run_id).order_by(AgentEvent.created_at.asc())
@@ -95,8 +115,8 @@ def list_events(db: Session, run_id: UUID) -> list[AgentEvent]:
     )
 
 
-def resume_run(db: Session, run_id: UUID, decision: dict) -> WorkflowRun:
-    run = get_run(db, run_id)
+def resume_run(db: Session, run_id: UUID, decision: dict, user: User | None = None) -> WorkflowRun:
+    run = get_run(db, run_id, user)
     graph = _graph_or_503()
     config = {"configurable": {"thread_id": run.thread_id}}
     snapshot = graph.get_state(config)
@@ -138,8 +158,8 @@ def resume_run(db: Session, run_id: UUID, decision: dict) -> WorkflowRun:
     return run
 
 
-def list_checkpoints(db: Session, run_id: UUID) -> list[dict]:
-    run = get_run(db, run_id)
+def list_checkpoints(db: Session, run_id: UUID, user: User | None = None) -> list[dict]:
+    run = get_run(db, run_id, user)
     graph = _graph_or_503()
     config = {"configurable": {"thread_id": run.thread_id}}
     rows = []
@@ -172,8 +192,9 @@ def fork_run(
     branch_label: str,
     user_request: str | None,
     constraints: str | None,
+    user: User | None = None,
 ) -> WorkflowRun:
-    parent = get_run(db, run_id)
+    parent = get_run(db, run_id, user)
     graph = _graph_or_503()
     source = graph.get_state(
         {"configurable": {"thread_id": parent.thread_id, "checkpoint_id": checkpoint_id}}
@@ -187,6 +208,8 @@ def fork_run(
         parent_run_id=parent.id,
         parent_checkpoint_id=checkpoint_id,
         branch_label=branch_label or None,
+        owner_username=user.username if user else parent.owner_username,
+        owner_department=user.department if user else parent.owner_department,
         status="running",
         model_name=parent.model_name,
         prompt_version=parent.prompt_version,
@@ -194,7 +217,9 @@ def fork_run(
     )
     db.add(child)
     db.commit()
-    seed = _seed_from_checkpoint(source.values, child, parent, checkpoint_id, user_request, constraints)
+    seed = _seed_from_checkpoint(
+        source.values, child, parent, checkpoint_id, user_request, constraints, user
+    )
     as_node = _fork_source(tuple(source.next or ()))
     child_config = {"configurable": {"thread_id": child.thread_id}}
     if as_node is None:
@@ -210,8 +235,8 @@ def fork_run(
     return child
 
 
-def review_snapshot(db: Session, run_id: UUID) -> dict:
-    run = get_run(db, run_id)
+def review_snapshot(db: Session, run_id: UUID, user: User | None = None) -> dict:
+    run = get_run(db, run_id, user)
     graph = _graph_or_503()
     snapshot = graph.get_state({"configurable": {"thread_id": run.thread_id}})
     values = snapshot.values or {}
@@ -293,7 +318,20 @@ def status_from_snapshot(snapshot) -> str:
     return str(values.get("status") or "unknown")
 
 
-def _initial_state(run: WorkflowRun, project: Project, user_request: str, deliverables: list[str], settings) -> dict:
+def _can_read_run(run: WorkflowRun, user: User | None) -> bool:
+    if not run.owner_department:
+        return True
+    return user is not None and user.department == run.owner_department
+
+
+def _initial_state(
+    run: WorkflowRun,
+    project: Project,
+    user_request: str,
+    deliverables: list[str],
+    settings,
+    libraries: list[str],
+) -> dict:
     return {
         "run_id": str(run.id),
         "project_id": str(project.id),
@@ -315,6 +353,7 @@ def _initial_state(run: WorkflowRun, project: Project, user_request: str, delive
         "errors": [],
         "node_events": [],
         "status": "running",
+        "visible_libraries": libraries,
         "prompt_version": PROMPT_VERSION,
         "model_metadata": {
             "llm_provider": settings.llm_provider,
@@ -395,6 +434,7 @@ def _seed_from_checkpoint(
     checkpoint_id: str,
     user_request: str | None,
     constraints: str | None,
+    user: User | None,
 ) -> dict:
     seed = {
         key: value
@@ -416,6 +456,7 @@ def _seed_from_checkpoint(
     metadata["parent_run_id"] = str(parent.id)
     metadata["forked_from_checkpoint"] = checkpoint_id
     seed["model_metadata"] = metadata
+    seed["visible_libraries"] = visible_libraries(user.department) if user else [PUBLIC_LIBRARY]
     return seed
 
 

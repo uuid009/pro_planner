@@ -20,6 +20,7 @@ def retrieve_evidence(state: dict, db: Session, settings: Settings) -> dict:
             settings,
             query=query,
             project_id=_uuid(state.get("project_id")),
+            libraries=list(state.get("visible_libraries") or ["public"]),
         )
         for item in items:
             merged.setdefault(str(item.chunk_id), item.model_dump(mode="json"))

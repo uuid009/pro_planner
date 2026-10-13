@@ -6,9 +6,10 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_optional_user
 from app.api.errors import AppError
 from app.config import get_settings
-from app.db.models import Project
+from app.db.models import Project, User
 from app.db.session import get_db
 from app.services.artifact_service import compare_artifacts, get_artifact, list_evidence, list_project_artifacts
 from app.services.document_service import safe_storage_path
@@ -120,37 +121,68 @@ class EvidenceOut(BaseModel):
 
 
 @router.post("/api/projects/{project_id}/runs", response_model=RunOut, status_code=201)
-def create_run(project_id: UUID, payload: RunCreate, db: Session = Depends(get_db)):
-    return start_run(db, project_id, payload.user_request, payload.deliverables)
+def create_run(
+    project_id: UUID,
+    payload: RunCreate,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return start_run(db, project_id, payload.user_request, payload.deliverables, user)
 
 
 @router.get("/api/runs/{run_id}", response_model=RunOut)
-def read_run(run_id: UUID, db: Session = Depends(get_db)):
-    return get_run(db, run_id)
+def read_run(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return get_run(db, run_id, user)
 
 
 @router.get("/api/runs/{run_id}/events", response_model=list[EventOut])
-def read_events(run_id: UUID, db: Session = Depends(get_db)):
-    return list_events(db, run_id)
+def read_events(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return list_events(db, run_id, user)
 
 
 @router.get("/api/runs/{run_id}/checkpoints", response_model=list[CheckpointOut])
-def read_checkpoints(run_id: UUID, db: Session = Depends(get_db)):
-    return list_checkpoints(db, run_id)
+def read_checkpoints(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return list_checkpoints(db, run_id, user)
 
 
 @router.get("/api/runs/{run_id}/review")
-def read_review(run_id: UUID, db: Session = Depends(get_db)):
-    return review_snapshot(db, run_id)
+def read_review(
+    run_id: UUID,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return review_snapshot(db, run_id, user)
 
 
 @router.post("/api/runs/{run_id}/resume", response_model=RunOut)
-def resume(run_id: UUID, payload: ResumeIn, db: Session = Depends(get_db)):
-    return resume_run(db, run_id, payload.model_dump())
+def resume(
+    run_id: UUID,
+    payload: ResumeIn,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return resume_run(db, run_id, payload.model_dump(), user)
 
 
 @router.post("/api/runs/{run_id}/fork", response_model=RunOut, status_code=201)
-def fork(run_id: UUID, payload: ForkIn, db: Session = Depends(get_db)):
+def fork(
+    run_id: UUID,
+    payload: ForkIn,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
     return fork_run(
         db,
         run_id,
@@ -158,12 +190,17 @@ def fork(run_id: UUID, payload: ForkIn, db: Session = Depends(get_db)):
         branch_label=payload.branch_label,
         user_request=payload.user_request,
         constraints=payload.constraints,
+        user=user,
     )
 
 
 @router.get("/api/projects/{project_id}/runs", response_model=list[RunOut])
-def read_project_runs(project_id: UUID, db: Session = Depends(get_db)):
-    return list_project_runs(db, project_id)
+def read_project_runs(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User | None = Depends(get_optional_user),
+):
+    return list_project_runs(db, project_id, user)
 
 
 @router.get("/api/projects/{project_id}/artifacts", response_model=list[ArtifactOut])

@@ -9,6 +9,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError
+from app.authz import PUBLIC_LIBRARY
 from app.config import Settings
 from app.db.models import Document, DocumentChunk, DocumentVersion
 from app.rag.chunking import chunk_blocks
@@ -107,10 +108,12 @@ def hybrid_search(
     document_type: str | None = None,
     document_ids: list[UUID] | None = None,
     validity_status: str = "active",
+    libraries: list[str] | None = None,
 ) -> list[EvidenceItem]:
     cleaned = query.strip()
     if not cleaned:
         raise AppError(400, "empty_query", "检索查询不能为空")
+    allowed = libraries if libraries is not None else [PUBLIC_LIBRARY]
     candidate_limit = settings.retrieval_top_k
     lexical_hits = lexical_search(
         db,
@@ -120,6 +123,7 @@ def hybrid_search(
         document_type=document_type,
         document_ids=document_ids,
         validity_status=validity_status,
+        libraries=allowed,
     )
     query_vector = embed_query(cleaned, settings)
     vector_hits = vector_search(
@@ -130,6 +134,7 @@ def hybrid_search(
         document_type=document_type,
         document_ids=document_ids,
         validity_status=validity_status,
+        libraries=allowed,
     )
     lexical_ids = [str(chunk.id) for chunk, _score in lexical_hits]
     vector_ids = [str(chunk.id) for chunk, _score in vector_hits]

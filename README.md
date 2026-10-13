@@ -1,6 +1,6 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 4**：在 Phase 3 的工作流上支持同一 `thread_id` 的人工恢复、检查点历史，以及从历史检查点分叉到新的 `thread_id`。正式 DOCX/XLSX 导出和界面仍未实现。
+本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 5**：人工批准后导出 DOCX 项目书和 XLSX 任务计划，并用 Streamlit 提供项目工作台、知识库、审核、执行历史和产物版本页面。
 
 规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
@@ -17,6 +17,10 @@ bash /data/zch/workspace/pro_planner/scripts/start_vllm.sh
 # 终端 2：应用
 cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+# 终端 3：界面
+cd /data/zch/workspace/pro_planner
+API_BASE_URL=http://127.0.0.1:8000 /data/djh/algo_infer/bin/python -m streamlit run app/ui/streamlit_app.py --server.address 127.0.0.1 --server.port 8501
 ```
 
 ```bash
@@ -24,7 +28,7 @@ cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/python -m pytest
 ```
 
-最近一次：`64 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
+最近一次：`66 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
 
 本机 CUDA 12.4 的 nvcc 无法编译 FlashInfer sampling（不支持 `--compress-mode`）。启动脚本已设置 `VLLM_USE_FLASHINFER_SAMPLER=0`。
 
@@ -62,7 +66,7 @@ cd /data/zch/workspace/pro_planner
 - `POST /api/documents/upload`，`GET /api/documents`
 - `POST /api/documents/{document_id}/index`
 - `POST /api/retrieval/search`
-- `POST /api/projects/{project_id}/runs`
+- `POST /api/projects/{project_id}/runs`，`GET /api/projects/{project_id}/runs`
 - `GET /api/runs/{run_id}`
 - `GET /api/runs/{run_id}/events`
 - `GET /api/runs/{run_id}/checkpoints`
@@ -72,14 +76,19 @@ cd /data/zch/workspace/pro_planner
 - `GET /api/projects/{project_id}/artifacts`
 - `GET /api/artifacts/{artifact_id}/download`
 - `GET /api/artifacts/{artifact_id}/evidence`
+- `GET /api/artifacts/compare?left=&right=`
 
 上传文件按 SHA-256 去重，存储名使用随机 UUID，数据库只保存相对路径。重复索引会替换该版本下的旧 chunk。
 
 工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。`thread_id` 与业务 `run_id` 分开。检查点能恢复执行位置，但重放会再次调用模型，不能保证输出逐字一致。
 
-恢复必须走原来的 `thread_id`，决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。审核人使用配置里的 `demo_user_id`，这是本地演示用户，不是生产身份认证。`approve` 只写入 JSON 草稿快照（`review_status=demo_approved`），同一运行、同一内容重复提交不会新增版本。这不是正式 DOCX/XLSX。
+恢复必须走原来的 `thread_id`，决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。审核人使用配置里的 `demo_user_id`，这是本地演示用户，不是生产身份认证。`approve` 会写入 JSON 草稿快照，并另存 DOCX 项目书和 XLSX 任务计划。三者的 `review_status` 都是 `demo_approved`，表示演示确认，不是正式发布。同一运行、同一内容重复提交不会新增版本。待确认段落和任务会保留，并标成「待确认」，导出时不会删掉。
 
-分叉从指定 `checkpoint_id` 复制状态到新的 `thread_id` 和 `run_id`，并记录父运行与父检查点。分支不会改写父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。
+`GET /api/artifacts/compare` 返回 unified diff。这是文本级差异，不是语义级版本比较。
+
+分叉从指定 `checkpoint_id` 复制状态到新的 `thread_id` 和 `run_id`，并记录父运行与父检查点。分支不会改写父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。检查点目前不会自动清理。
+
+界面在 `app/ui/streamlit_app.py`。执行历史页只展示运行、线程、分支、节点事件和检查点摘要，不是图形化 LangGraph Studio。仓库里没有界面截图。
 
 数据库迁移：
 
@@ -105,7 +114,7 @@ flowchart LR
 
 ## 尚未完成
 
-Phase 5 才导出 DOCX/XLSX 并做 Streamlit 界面。Docker Compose 中的 `ui` 服务要等页面落地后才能运行。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。
+Docker Compose 里的 `ui` 服务会启动上述 Streamlit 入口。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。Phase 6 才会做格式检查和更完整的文档核对。
 
 ## 隐私
 

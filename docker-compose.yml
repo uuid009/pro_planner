@@ -33,6 +33,7 @@ services:
       RERANKER_ENABLED: ${RERANKER_ENABLED:-false}
       RERANKER_MODEL: ${RERANKER_MODEL:-bge-reranker-v2-m3}
       UPLOAD_DIR: /app/data/uploads
+      ARTIFACT_DIR: /app/data/artifacts
       APP_ENV: ${APP_ENV:-development}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
     depends_on:

@@ -17,7 +17,7 @@ from app.db.models import AgentEvent, ApprovalRecord, Project, WorkflowRun
 from app.graph.runtime import bind_db, persist_node_events, unbind_db
 from app.graph.state import PROMPT_VERSION
 from app.graph.workflow import get_compiled_graph
-from app.services.artifact_service import persist_approved_snapshot
+from app.services.artifact_service import persist_approved_exports
 
 
 def start_run(db: Session, project_id: UUID, user_request: str, deliverables: list[str]) -> WorkflowRun:
@@ -74,6 +74,18 @@ def get_run(db: Session, run_id: UUID) -> WorkflowRun:
     return run
 
 
+def list_project_runs(db: Session, project_id: UUID) -> list[WorkflowRun]:
+    if db.get(Project, project_id) is None:
+        raise AppError(404, "project_not_found", "项目不存在")
+    return list(
+        db.scalars(
+            select(WorkflowRun)
+            .where(WorkflowRun.project_id == project_id)
+            .order_by(WorkflowRun.created_at.desc())
+        )
+    )
+
+
 def list_events(db: Session, run_id: UUID) -> list[AgentEvent]:
     get_run(db, run_id)
     return list(
@@ -110,7 +122,7 @@ def resume_run(db: Session, run_id: UUID, decision: dict) -> WorkflowRun:
         and payload.get("decision") == "approve"
         and status_from_snapshot(snapshot) == "approved_pending_export"
     ):
-        artifact = persist_approved_snapshot(
+        artifact = persist_approved_exports(
             db,
             get_settings(),
             project_id=run.project_id,

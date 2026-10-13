@@ -10,13 +10,14 @@ from app.api.errors import AppError
 from app.config import get_settings
 from app.db.models import Project
 from app.db.session import get_db
-from app.services.artifact_service import get_artifact, list_evidence, list_project_artifacts
+from app.services.artifact_service import compare_artifacts, get_artifact, list_evidence, list_project_artifacts
 from app.services.document_service import safe_storage_path
 from app.services.workflow_service import (
     fork_run,
     get_run,
     list_checkpoints,
     list_events,
+    list_project_runs,
     resume_run,
     review_snapshot,
     start_run,
@@ -86,11 +87,25 @@ class ArtifactOut(BaseModel):
     run_id: UUID | None
     artifact_type: str
     version_number: int
+    parent_version_id: UUID | None = None
     sha256: str
     summary: str
     review_status: str
 
     model_config = {"from_attributes": True}
+
+
+_DOWNLOADS = {
+    "draft_snapshot": ("application/json", ".json"),
+    "proposal_docx": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".docx",
+    ),
+    "plan_xlsx": (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".xlsx",
+    ),
+}
 
 
 class EvidenceOut(BaseModel):
@@ -146,6 +161,11 @@ def fork(run_id: UUID, payload: ForkIn, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/api/projects/{project_id}/runs", response_model=list[RunOut])
+def read_project_runs(project_id: UUID, db: Session = Depends(get_db)):
+    return list_project_runs(db, project_id)
+
+
 @router.get("/api/projects/{project_id}/artifacts", response_model=list[ArtifactOut])
 def read_artifacts(project_id: UUID, db: Session = Depends(get_db)):
     if db.get(Project, project_id) is None:
@@ -158,10 +178,17 @@ def read_artifact_evidence(artifact_id: UUID, db: Session = Depends(get_db)):
     return list_evidence(db, artifact_id)
 
 
+@router.get("/api/artifacts/compare")
+def compare(left: UUID, right: UUID, db: Session = Depends(get_db)):
+    return compare_artifacts(db, get_settings(), left, right)
+
+
 @router.get("/api/artifacts/{artifact_id}/download")
 def download_artifact(artifact_id: UUID, db: Session = Depends(get_db)):
     artifact = get_artifact(db, artifact_id)
     path = safe_storage_path(get_settings().artifact_dir, artifact.relative_path)
     if not path.is_file():
         raise AppError(404, "artifact_file_missing", "产物文件不存在")
-    return FileResponse(path, media_type="application/json", filename=f"{artifact.artifact_type}.json")
+    media_type, suffix = _DOWNLOADS.get(artifact.artifact_type, ("application/octet-stream", ""))
+    filename = f"{artifact.artifact_type}_v{artifact.version_number}{suffix}"
+    return FileResponse(path, media_type=media_type, filename=filename)

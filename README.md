@@ -1,6 +1,6 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 5**：人工批准后导出 DOCX 项目书和 XLSX 任务计划，并用 Streamlit 提供项目工作台、知识库、审核、执行历史和产物版本页面。
+本地化企业项目策划与计划编制多智能体平台。Phase 1 到 Phase 5 已可用：上传历史材料、混合检索、生成项目书和任务计划、人工审核后恢复或分叉，并导出 DOCX / XLSX。Phase 5 之后又加了登录和部门资料隔离。Phase 6 的格式检查和文档核对尚未做。
 
 规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
@@ -49,19 +49,79 @@ cd /data/zch/workspace/pro_planner
 - `models/bge-reranker-v2-m3`
 - `models/bge-m3` → `models/bge-large-zh-v1.5`
 
-## Phase 2 能力
+## 现在能做什么
 
-1. 上传 PDF / DOCX / XLSX 后调用 `POST /api/documents/{document_id}/index` 解析、切分、向量化并写入 `document_chunks`。
-2. `POST /api/retrieval/search` 做混合检索：PostgreSQL `simple` 全文检索 + 中文/关键词 `ILIKE` 补充 + pgvector 余弦检索，再用 RRF 融合。
+面向本地演示，用来把已有项目材料整理成一份可审核的项目书和任务计划。不连接 OA、ERP 或企业 SSO，输出没有正式审批效力。
+
+一次完整使用是：
+
+1. 在界面创建用户并选择算法组、框架组或测试组，然后登录。
+2. 创建项目，填写这次要编制的需求。
+3. 把 PDF、DOCX、XLSX 上传到本部门或公共资料库，并建立索引。
+4. 启动一次生成。系统检索本部门和公共资料，起草项目书和结构化任务计划。
+5. 关键信息缺失，或生成结果需要确认时，流程会暂停。可以补充信息、提出修改意见、选择方案或批准。
+6. 批准后下载 DOCX 项目书和 XLSX 任务计划，查看产物版本、引用证据和文本差异。
+7. 从历史检查点开一条新分支，比较不同修改路径。分支不会改掉原来那次运行的产物和审批记录。
+
+项目本身仍是共享的。文档、检索结果，以及登录后启动的工作流，按部门和公共资料库隔离。
+
+## 各阶段能力
+
+### Phase 1：项目与文档登记
+
+- 健康检查、项目创建与查询、文件上传。
+- 上传按 SHA-256 去重，存储名使用随机 UUID，数据库只保存相对路径。
+- Alembic 管理表结构。集成测试使用外层事务，业务数据会回滚。
+
+### Phase 2：文档入库与检索
+
+1. 上传 PDF / DOCX / XLSX 后调用 `POST /api/documents/{document_id}/index` 解析、切分、向量化并写入 `document_chunks`。重复索引会替换该版本下的旧 chunk。
+2. `POST /api/retrieval/search` 做混合检索：PostgreSQL `simple` 全文检索 + 中文/关键词 `ILIKE` 补充 + pgvector 余弦检索，再用 RRF 融合。Reranker 默认关闭。
 3. 返回 `EvidenceItem`：文档、版本、chunk、页码/章节、原文片段和核验状态。引用只表示用了该片段，不代表内容已获业务批准。
 
 中文限制：`content_tsv` 使用 PostgreSQL `simple` 配置，不能当作中文分词已经解决。检索层会抽取汉字片段和二字窗口做关键词补充。
+
+### Phase 3：生成工作流
+
+固定流程，不是开放式多 Agent 对话：
+
+`analyze_request` → `check_missing_information` →（缺目标、日期或交付物时进入 `human_clarification`）→ `retrieve_evidence` → `assess_evidence` → 并行 `generate_proposal` 与 `generate_plan` → `validate_plan` → `audit_output` →（不通过则 `revise_output`，最多 3 轮）→ `human_approval`。
+
+- 项目书按章节生成，任务计划包含阶段、任务、角色、起止日期、依赖、交付物、验收标准和风险。
+- 日期、依赖和循环依赖由规则校验。模型不能把自评当成事实已经成立。
+- 证据不足或数字缺少依据时保留内容，并标成待确认，不删掉。
+- 运行状态和节点事件可以查询。检查点存在 PostgreSQL，`thread_id` 与业务 `run_id` 分开。重放会再次调用模型，不能保证逐字一致。
+
+### Phase 4：人工审核与分支
+
+- 暂停后用原来的 `thread_id` 恢复。决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。
+- 可以查看检查点摘要，并从指定检查点分叉到新的 `thread_id` 和 `run_id`，同时记录父运行和父检查点。
+- 子分支不覆盖父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。检查点目前不会自动清理。
+
+### Phase 5：导出与界面
+
+- `approve` 写入 JSON 草稿快照，并另存 DOCX 项目书和 XLSX 任务计划。三者的 `review_status` 都是 `demo_approved`，表示演示确认，不是正式发布。
+- 同一运行、同一内容重复提交不会新增版本。待确认段落和任务会保留，并标成「待确认」。
+- `GET /api/artifacts/compare` 返回 unified diff，是文本差异，不是语义比较。
+- Streamlit 页面：项目工作台、知识库、人工审核、执行历史、产物与版本。执行历史只展示运行、线程、分支、节点事件和检查点摘要，不是图形化 LangGraph Studio。
+
+### 部门资料隔离
+
+Phase 5 之后增加，不属于原规格阶段：
+
+- `POST /api/auth/register` 创建用户时必须选择算法组、框架组或测试组；`POST /api/auth/login` 登录。
+- 上传目标只能是本部门或公共资料库，不能指定其他部门。
+- 文档列表、手工检索，以及登录后启动的工作流检索，只使用本部门和公共资料库。
+- 已有文档迁移为公共资料，旧文件仍然可见。
+- 带归属部门的工作流运行，其他部门读取、恢复或分叉时返回不存在。没有归属的旧运行仍可查看。
+- 密码保存为慢哈希，登录令牌只保存摘要。这是本地演示账号，不是生产身份认证。
 
 ## API
 
 已提供：
 
 - `GET /health`
+- `POST /api/auth/register`，`POST /api/auth/login`
 - `POST/GET /api/projects`，`GET /api/projects/{id}`
 - `POST /api/documents/upload`，`GET /api/documents`
 - `POST /api/documents/{document_id}/index`
@@ -78,17 +138,7 @@ cd /data/zch/workspace/pro_planner
 - `GET /api/artifacts/{artifact_id}/evidence`
 - `GET /api/artifacts/compare?left=&right=`
 
-上传文件按 SHA-256 去重，存储名使用随机 UUID，数据库只保存相对路径。重复索引会替换该版本下的旧 chunk。
-
-工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。`thread_id` 与业务 `run_id` 分开。检查点能恢复执行位置，但重放会再次调用模型，不能保证输出逐字一致。
-
-恢复必须走原来的 `thread_id`，决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。审核人使用配置里的 `demo_user_id`，这是本地演示用户，不是生产身份认证。`approve` 会写入 JSON 草稿快照，并另存 DOCX 项目书和 XLSX 任务计划。三者的 `review_status` 都是 `demo_approved`，表示演示确认，不是正式发布。同一运行、同一内容重复提交不会新增版本。待确认段落和任务会保留，并标成「待确认」，导出时不会删掉。
-
-`GET /api/artifacts/compare` 返回 unified diff。这是文本级差异，不是语义级版本比较。
-
-分叉从指定 `checkpoint_id` 复制状态到新的 `thread_id` 和 `run_id`，并记录父运行与父检查点。分支不会改写父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。检查点目前不会自动清理。
-
-界面在 `app/ui/streamlit_app.py`。执行历史页只展示运行、线程、分支、节点事件和检查点摘要，不是图形化 LangGraph Studio。仓库里没有界面截图。
+工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。审核人使用配置里的 `demo_user_id`，这是本地演示用户，不是生产身份认证。待确认段落和任务会保留，并标成「待确认」，导出时不会删掉。界面入口是 `app/ui/streamlit_app.py`。仓库里没有界面截图。
 
 数据库迁移：
 

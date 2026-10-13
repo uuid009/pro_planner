@@ -1,6 +1,6 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 3**：在 Phase 2 的检索之上，用 LangGraph 跑通分析、检索、项目书、任务计划、规则校验、审核和有限次修订，并在人工审核节点暂停。恢复、分叉、导出和界面尚未实现。
+本地化企业项目策划与计划编制多智能体平台。当前进度是 **Phase 4**：在 Phase 3 的工作流上支持同一 `thread_id` 的人工恢复、检查点历史，以及从历史检查点分叉到新的 `thread_id`。正式 DOCX/XLSX 导出和界面仍未实现。
 
 规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
@@ -24,7 +24,7 @@ cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/python -m pytest
 ```
 
-最近一次：`60 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
+最近一次：`64 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
 
 本机 CUDA 12.4 的 nvcc 无法编译 FlashInfer sampling（不支持 `--compress-mode`）。启动脚本已设置 `VLLM_USE_FLASHINFER_SAMPLER=0`。
 
@@ -65,10 +65,21 @@ cd /data/zch/workspace/pro_planner
 - `POST /api/projects/{project_id}/runs`
 - `GET /api/runs/{run_id}`
 - `GET /api/runs/{run_id}/events`
+- `GET /api/runs/{run_id}/checkpoints`
+- `GET /api/runs/{run_id}/review`
+- `POST /api/runs/{run_id}/resume`
+- `POST /api/runs/{run_id}/fork`
+- `GET /api/projects/{project_id}/artifacts`
+- `GET /api/artifacts/{artifact_id}/download`
+- `GET /api/artifacts/{artifact_id}/evidence`
 
 上传文件按 SHA-256 去重，存储名使用随机 UUID，数据库只保存相对路径。重复索引会替换该版本下的旧 chunk。
 
-工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。`thread_id` 与业务 `run_id` 分开。检查点能恢复执行位置，但重放会再次调用模型，不能保证输出逐字一致。人工恢复和从检查点分叉属于 Phase 4。批准后的文档导出属于 Phase 5，当前批准只把状态记为 `approved_pending_export`。
+工作流使用 PostgreSQL Checkpointer，连接池在应用启动时创建。`thread_id` 与业务 `run_id` 分开。检查点能恢复执行位置，但重放会再次调用模型，不能保证输出逐字一致。
+
+恢复必须走原来的 `thread_id`，决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。审核人使用配置里的 `demo_user_id`，这是本地演示用户，不是生产身份认证。`approve` 只写入 JSON 草稿快照（`review_status=demo_approved`），同一运行、同一内容重复提交不会新增版本。这不是正式 DOCX/XLSX。
+
+分叉从指定 `checkpoint_id` 复制状态到新的 `thread_id` 和 `run_id`，并记录父运行与父检查点。分支不会改写父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。
 
 数据库迁移：
 
@@ -94,7 +105,7 @@ flowchart LR
 
 ## 尚未完成
 
-Phase 4 才会提供 `interrupt` 之后的恢复接口、检查点历史和分支。Phase 5 才导出 DOCX/XLSX 并做 Streamlit 界面。Docker Compose 中的 `ui` 服务要等页面落地后才能运行。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。
+Phase 5 才导出 DOCX/XLSX 并做 Streamlit 界面。Docker Compose 中的 `ui` 服务要等页面落地后才能运行。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。
 
 ## 隐私
 

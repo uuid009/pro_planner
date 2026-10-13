@@ -13,7 +13,11 @@ def revise_output(state: dict, settings: Settings) -> dict:
     error_issues = [issue for issue in issues if issue.get("severity") == "error"]
     if settings.llm_mock:
         proposal = state.get("proposal_draft") or {}
-        tasks = _fix_tasks(state.get("plan_tasks") or [], state.get("project_brief") or {})
+        tasks = _fix_tasks(
+            state.get("plan_tasks") or [],
+            state.get("project_brief") or {},
+            str(state.get("review_feedback") or ""),
+        )
         summary = f"Mock 修订了 {len(error_issues)} 条规则问题"
     else:
         proposal_model = complete_model(
@@ -59,12 +63,15 @@ def _messages(instruction: str, schema: type, state: dict) -> list[dict]:
     ]
 
 
-def _fix_tasks(tasks: list[dict], brief: dict) -> list[dict]:
+def _fix_tasks(tasks: list[dict], brief: dict, feedback: str) -> list[dict]:
     start = parse_iso_date(brief.get("plan_start_date"))
     end = parse_iso_date(brief.get("plan_end_date"))
+    feedback = feedback.strip()
     fixed = []
     for raw in tasks:
         task = dict(raw)
+        if feedback:
+            task["description"] = f"{task.get('description') or ''}\n修订意见：{feedback[:200]}".strip()
         if start and end:
             task["start_date"] = start.isoformat()
             task["end_date"] = end.isoformat()

@@ -181,7 +181,12 @@ def _human_approval(state: WorkflowState) -> dict:
     )
     decision = answer if isinstance(answer, dict) else {"decision": "revise", "comment": str(answer)}
     kind = decision.get("decision") or "revise"
-    status = "approved_pending_export" if kind == "approve" else "review_received"
+    if kind == "approve":
+        status = "approved_pending_export"
+    elif kind == "select_option":
+        status = "option_selected"
+    else:
+        status = "review_received"
     return {
         "review_decision": {
             "decision": kind,

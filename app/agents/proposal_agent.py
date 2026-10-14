@@ -7,14 +7,15 @@ from app.graph.json_output import complete_model, schema_hint
 from app.planning.schemas import ProposalDocument, ProposalSection
 
 REQUIRED_HEADINGS = (
-    "项目背景",
-    "建设必要性",
-    "目标",
-    "实施内容",
+    "项目概述",
+    "建设目标与预期成果",
+    "建设内容与实施方案",
     "技术路线",
-    "实施步骤",
-    "预期成果",
-    "风险与保障措施",
+    "实施阶段与里程碑",
+    "组织保障与资源需求",
+    "风险分析与应对措施",
+    "验收方式与交付物",
+    "参考材料与待确认事项",
 )
 
 
@@ -56,19 +57,24 @@ def _mock_proposal(brief: dict, evidence: list[dict], mock: bool) -> ProposalDoc
     evidence_ids = [item.get("evidence_id") or item.get("chunk_id") for item in evidence[:3]]
     evidence_ids = [str(item) for item in evidence_ids if item]
     needs_confirmation = not evidence_ids
-    objective = brief.get("objective") or "待确认目标"
+    objective = brief.get("objective") or brief.get("supplement") or "目标待确认。"
+    sources = (
+        "、".join(str(item.get("title")) for item in evidence[:5] if item.get("title"))
+        or "本次未检索到可引用材料。"
+    )
     sections = []
     bodies = {
-        "项目背景": brief.get("background") or "背景待确认，不能视为已核实事实。",
-        "建设必要性": "必要性需结合证据确认。"
+        "项目概述": brief.get("background") or "背景待确认，不能视为已核实事实。",
+        "建设目标与预期成果": objective,
+        "建设内容与实施方案": "、".join(brief.get("deliverables") or ["实施内容待确认。"]),
+        "技术路线": "技术路线待结合授权材料确认。"
         if needs_confirmation
-        else "必要性来自已检索材料，仍需人工确认适用范围。",
-        "目标": objective,
-        "实施内容": "、".join(brief.get("deliverables") or ["待确认实施内容"]),
-        "技术路线": "采用本地模型与本地知识库，不连接云端模型。",
-        "实施步骤": "先补齐资料，再编制方案和任务计划，最后人工审核。",
-        "预期成果": "、".join(brief.get("deliverables") or ["待确认成果"]),
-        "风险与保障措施": brief.get("constraints") or "约束不足，风险项待确认。",
+        else "技术路线来自已检索材料，仍需人工确认是否适用于本项目。",
+        "实施阶段与里程碑": "未提供起止日期，里程碑待确认，不编造日期。",
+        "组织保障与资源需求": "人员、预算和资源未在输入中给出，待确认，不编造。",
+        "风险分析与应对措施": brief.get("constraints") or "约束和风险待确认。",
+        "验收方式与交付物": "验收方式和交付物待确认。",
+        "参考材料与待确认事项": sources,
     }
     for heading in REQUIRED_HEADINGS:
         sections.append(

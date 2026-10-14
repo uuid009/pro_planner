@@ -131,12 +131,27 @@ def test_approve_is_idempotent_and_fork_keeps_parent_artifacts(client, monkeypat
     assert parent_review["approvals"][0]["decision"] == "approve"
 
 
-def test_missing_deliverable_can_be_clarified(client, monkeypatch, tmp_path):
+def test_missing_deliverable_continues_to_review(client, monkeypatch, tmp_path):
     _use_mock(monkeypatch, tmp_path)
     project = _project(client)
     created = client.post(
         f"/api/projects/{project['id']}/runs",
         json={"user_request": "请编制实施方案", "deliverables": []},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["status"] == "awaiting_review"
+
+
+def test_blank_content_can_be_clarified(client, monkeypatch, tmp_path):
+    _use_mock(monkeypatch, tmp_path)
+    project = client.post(
+        "/api/projects",
+        json={"name": "待补充计划书", "objective": " ", "background": "", "constraints": ""},
+    )
+    assert project.status_code == 201, project.text
+    created = client.post(
+        f"/api/projects/{project.json()['id']}/runs",
+        json={"user_request": " ", "deliverables": []},
     )
     assert created.status_code == 201, created.text
     assert created.json()["status"] == "awaiting_information"
@@ -146,7 +161,7 @@ def test_missing_deliverable_can_be_clarified(client, monkeypatch, tmp_path):
 
     resumed = client.post(
         f"/api/runs/{created.json()['id']}/resume",
-        json={"information": "交付项目书和任务计划"},
+        json={"information": "统一台账并形成可审核的实施方案"},
     )
     assert resumed.status_code == 200, resumed.text
     assert resumed.json()["status"] == "awaiting_review"

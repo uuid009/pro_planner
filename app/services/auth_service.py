@@ -34,6 +34,31 @@ def register_user(db: Session, username: str, password: str, department: str) ->
     return user, _issue_token(db, user)
 
 
+def ensure_demo_user(db: Session, department: str) -> tuple[User, str]:
+    """签发演示身份。没有对应账号时创建，不返回密码。这不是生产登录。"""
+    if department not in DEPARTMENTS:
+        raise AppError(422, "invalid_department", "部门必须是算法组、框架组或测试组")
+    username = f"demo-{department}"
+    user = db.scalar(select(User).where(User.username == username))
+    if user is None:
+        user = User(
+            username=username,
+            password_hash=hash_password(secrets.token_urlsafe(24)),
+            department=department,
+        )
+        db.add(user)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            user = db.scalar(select(User).where(User.username == username))
+            if user is None:
+                raise AppError(409, "username_taken", "演示用户创建失败") from None
+        else:
+            db.refresh(user)
+    return user, _issue_token(db, user)
+
+
 def login_user(db: Session, username: str, password: str) -> tuple[User, str]:
     user = db.scalar(select(User).where(User.username == username.strip()))
     if user is None or not verify_password(password, user.password_hash):

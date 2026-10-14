@@ -30,11 +30,13 @@ def api_base_url() -> str:
 
 
 def request(method: str, path: str, **kwargs: Any) -> Any:
+    raw = bool(kwargs.pop("raw", False))
+    timeout = kwargs.pop("timeout", 120)
     headers = dict(kwargs.pop("headers", None) or {})
     token = _token.get()
     if token and "Authorization" not in headers:
         headers["Authorization"] = f"Bearer {token}"
-    with httpx.Client(base_url=api_base_url(), timeout=120) as client:
+    with httpx.Client(base_url=api_base_url(), timeout=timeout) as client:
         response = client.request(method, path, headers=headers, **kwargs)
     if response.status_code >= 400:
         try:
@@ -43,7 +45,7 @@ def request(method: str, path: str, **kwargs: Any) -> Any:
             payload = {"error": {"message": response.text[:200]}}
         raise ApiError(response.status_code, payload)
     content_type = response.headers.get("content-type", "")
-    if "application/json" in content_type:
+    if not raw and "application/json" in content_type:
         return response.json()
     return response.content
 
@@ -58,6 +60,23 @@ def register_user(username: str, password: str, department: str) -> dict:
 
 def login_user(username: str, password: str) -> dict:
     return request("POST", "/api/auth/login", json={"username": username, "password": password})
+
+
+def demo_login(department: str = "algorithm") -> dict:
+    return request("POST", "/api/auth/demo", json={"department": department})
+
+
+def health() -> dict:
+    return request("GET", "/health")
+
+
+def create_proposal(title: str, content_brief: str) -> dict:
+    return request(
+        "POST",
+        "/api/proposals",
+        json={"title": title, "content_brief": content_brief},
+        timeout=600,
+    )
 
 
 def list_projects() -> list[dict]:
@@ -97,7 +116,7 @@ def review(run_id: UUID | str) -> dict:
 
 
 def resume_run(run_id: UUID | str, payload: dict) -> dict:
-    return request("POST", f"/api/runs/{run_id}/resume", json=payload)
+    return request("POST", f"/api/runs/{run_id}/resume", json=payload, timeout=600)
 
 
 def fork_run(run_id: UUID | str, payload: dict) -> dict:
@@ -142,7 +161,8 @@ def list_artifacts(project_id: UUID | str) -> list[dict]:
 
 
 def download_artifact(artifact_id: UUID | str) -> bytes:
-    return request("GET", f"/api/artifacts/{artifact_id}/download")
+    # 草稿快照的类型是 application/json。下载必须保留原始字节，不能解析成对象。
+    return request("GET", f"/api/artifacts/{artifact_id}/download", raw=True)
 
 
 def compare_artifacts(left_id: UUID | str, right_id: UUID | str) -> dict:

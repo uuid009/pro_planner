@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 from app.config import Settings
 from app.graph.json_output import complete_model, schema_hint
@@ -43,14 +43,18 @@ def generate_plan(state: dict, settings: Settings) -> dict:
 
 
 def _mock_plan(brief: dict, evidence: list[dict], user_request: str, mock: bool) -> PlanDocument:
-    start = parse_iso_date(brief.get("plan_start_date")) or date(2026, 1, 1)
-    end = parse_iso_date(brief.get("plan_end_date")) or date(2026, 6, 30)
-    midpoint = min(start + timedelta(days=14), end)
+    start = parse_iso_date(brief.get("plan_start_date"))
+    end = parse_iso_date(brief.get("plan_end_date"))
     evidence_ids = [
         str(item.get("evidence_id")) for item in evidence[:2] if item.get("evidence_id")
     ]
-    needs_confirmation = not evidence_ids
-    second_end = start - timedelta(days=1) if "需要修订" in user_request else end
+    needs_confirmation = not evidence_ids or start is None or end is None
+    if start and end:
+        midpoint = min(start + timedelta(days=14), end)
+        second_end = start - timedelta(days=1) if "需要修订" in user_request else end
+    else:
+        midpoint = None
+        second_end = None
     tasks = [
         PlanTask(
             task_id="T1",

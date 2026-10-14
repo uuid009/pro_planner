@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.authz import DEPARTMENT_LABELS
 from app.db.models import User
 from app.db.session import get_db
-from app.services.auth_service import login_user, register_user
+from app.services.auth_service import ensure_demo_user, login_user, register_user
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -21,6 +21,10 @@ class RegisterIn(BaseModel):
 class LoginIn(BaseModel):
     username: str = Field(min_length=1, max_length=32)
     password: str = Field(min_length=1, max_length=128)
+
+
+class DemoIn(BaseModel):
+    department: Literal["algorithm", "framework", "testing"] = "algorithm"
 
 
 class UserOut(BaseModel):
@@ -53,4 +57,10 @@ def register(payload: RegisterIn, db: Session = Depends(get_db)):
 @router.post("/login", response_model=AuthOut)
 def login(payload: LoginIn, db: Session = Depends(get_db)):
     user, token = login_user(db, payload.username, payload.password)
+    return AuthOut(token=token, user=_user_out(user))
+
+
+@router.post("/demo", response_model=AuthOut)
+def demo_login(payload: DemoIn, db: Session = Depends(get_db)):
+    user, token = ensure_demo_user(db, payload.department)
     return AuthOut(token=token, user=_user_out(user))

@@ -1,8 +1,8 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。Phase 1 到 Phase 6 已完成：上传历史材料、混合检索、生成项目书和任务计划、人工审核后恢复或分叉、导出 DOCX / XLSX，以及登录和部门资料隔离。Phase 6 跑过格式检查、静态检查和自动化测试，结果写在下面。
+本地化企业项目计划书生成平台。用户提交标题和大致内容后，系统在当前组与公共组材料中检索证据，生成可审核的计划书，批准后导出 DOCX。Phase 6 跑过格式检查、静态检查和自动化测试，结果写在下面。
 
-规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
+当前使用流程按 `/data/zch/workspace/EnterprisePlan_AI_更新版需求说明.md` 收束。早期实现说明仍在 `EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
 ## 当前环境
 
@@ -53,19 +53,18 @@ cd /data/zch/workspace/pro_planner
 
 ## 现在能做什么
 
-面向本地演示，用来把已有项目材料整理成一份可审核的项目书和任务计划。不连接 OA、ERP 或企业 SSO，输出没有正式审批效力。
+面向本地演示，用来根据标题和大致内容，在当前组与公共组材料中检索证据并生成可审核的项目计划书。不连接 OA、ERP 或企业 SSO，输出没有正式审批效力。
 
 一次完整使用是：
 
-1. 在界面创建用户并选择算法组、框架组或测试组，然后登录。
-2. 创建项目，填写这次要编制的需求。
-3. 把 PDF、DOCX、XLSX 上传到本部门或公共资料库，并建立索引。
-4. 启动一次生成。系统检索本部门和公共资料，起草项目书和结构化任务计划。
-5. 关键信息缺失，或生成结果需要确认时，流程会暂停。可以补充信息、提出修改意见、选择方案或批准。
-6. 批准后下载 DOCX 项目书和 XLSX 任务计划，查看产物版本、引用证据和文本差异。
-7. 从历史检查点开一条新分支，比较不同修改路径。分支不会改掉原来那次运行的产物和审批记录。
+1. 在界面选择演示组并进入。这只决定检索范围，不是生产身份认证。
+2. 可选：把 PDF、DOCX、XLSX 上传到当前组或公共组并建立索引。没有材料也可以生成，缺证据的内容会标成待确认。
+3. 在「生成」页只填写计划书标题和大致内容。
+4. 系统检索当前组与公共组，起草计划书并停下等待审核。
+5. 在「审核」页批准、退回修订或补充信息。
+6. 批准后在「历史」页下载 DOCX。未批准的内容仍是草稿。
 
-项目本身仍是共享的。文档、检索结果，以及登录后启动的工作流，按部门和公共资料库隔离。
+日期、人员、预算和交付物不再作为生成前的必填项。材料里确认不了的事实保留为待确认，不编造。检查点分叉和方案选择仍保留在 API 中，界面不再露出。
 
 ## 各阶段能力
 
@@ -87,16 +86,16 @@ cd /data/zch/workspace/pro_planner
 
 固定流程，不是开放式多 Agent 对话：
 
-`analyze_request` → `check_missing_information` →（缺目标、日期或交付物时进入 `human_clarification`）→ `retrieve_evidence` → `assess_evidence` → 并行 `generate_proposal` 与 `generate_plan` → `validate_plan` → `audit_output` →（不通过则 `revise_output`，最多 3 轮）→ `human_approval`。
+`analyze_request` → `check_missing_information` →（只有标题或大致内容为空时进入 `human_clarification`）→ `retrieve_evidence` → `assess_evidence` → 并行 `generate_proposal` 与 `generate_plan` → `validate_plan` → `audit_output` →（不通过则 `revise_output`，默认最多 2 轮）→ `human_approval`。
 
-- 项目书按章节生成，任务计划包含阶段、任务、角色、起止日期、依赖、交付物、验收标准和风险。
+- 计划书按章节生成。主产物是 DOCX。内部仍会整理实施要点，但界面不把它当作必须处理的任务表。
 - 日期、依赖和循环依赖由规则校验。模型不能把自评当成事实已经成立。
 - 证据不足或数字缺少依据时保留内容，并标成待确认，不删掉。
 - 运行状态和节点事件可以查询。检查点存在 PostgreSQL，`thread_id` 与业务 `run_id` 分开。重放会再次调用模型，不能保证逐字一致。
 
 ### Phase 4：人工审核与分支
 
-- 暂停后用原来的 `thread_id` 恢复。决策为 `approve`、`revise`、`request_information` 或 `select_option`。`revise` 必须带意见。
+- 暂停后用原来的 `thread_id` 恢复。界面决策为 `approve`、`revise`、`request_information`。`revise` 必须带意见。API 仍接受旧的 `select_option`。
 - 可以查看检查点摘要，并从指定检查点分叉到新的 `thread_id` 和 `run_id`，同时记录父运行和父检查点。
 - 子分支不覆盖父运行的产物和审批记录。官方 Postgres Checkpointer 没有可用的 `copy_thread`，这里用新线程上的状态写入继续执行。检查点目前不会自动清理。
 
@@ -105,7 +104,7 @@ cd /data/zch/workspace/pro_planner
 - `approve` 写入 JSON 草稿快照，并另存 DOCX 项目书和 XLSX 任务计划。三者的 `review_status` 都是 `demo_approved`，表示演示确认，不是正式发布。
 - 同一运行、同一内容重复提交不会新增版本。待确认段落和任务会保留，并标成「待确认」。
 - `GET /api/artifacts/compare` 返回 unified diff，是文本差异，不是语义比较。
-- Streamlit 页面：项目工作台、知识库、人工审核、执行历史、产物与版本。执行历史只展示运行、线程、分支、节点事件和检查点摘要，不是图形化 LangGraph Studio。
+- Streamlit 有四个页面：生成、审核、历史、资料库。生成页只有标题和大致内容。资料库负责上传和试检索，不进入生成表单。
 
 ### 部门资料隔离
 
@@ -123,7 +122,8 @@ Phase 5 之后增加，不属于原规格阶段：
 交互式接口说明在应用启动后的 `GET /docs`（ReDoc 为 `GET /redoc`）。已提供：
 
 - `GET /health`
-- `POST /api/auth/register`，`POST /api/auth/login`
+- `POST /api/auth/register`，`POST /api/auth/login`，`POST /api/auth/demo`
+- `POST /api/proposals`，请求体只有 `title` 和 `content_brief`
 - `POST/GET /api/projects`，`GET /api/projects/{id}`
 - `POST /api/documents/upload`，`GET /api/documents`
 - `POST /api/documents/{document_id}/index`
@@ -182,7 +182,7 @@ flowchart LR
 ```mermaid
 flowchart TD
   analyze[analyze_request] --> missing[check_missing_information]
-  missing -->|缺目标、日期或交付物| clarify[human_clarification]
+  missing -->|缺标题或大致内容| clarify[human_clarification]
   missing --> retrieve[retrieve_evidence]
   clarify --> retrieve
   retrieve --> assess[assess_evidence]
@@ -191,7 +191,7 @@ flowchart TD
   proposal --> validate[validate_plan]
   plan --> validate
   validate --> audit[audit_output]
-  audit -->|不通过且未满 3 轮| revise[revise_output]
+  audit -->|不通过且未满修订上限| revise[revise_output]
   revise --> validate
   audit --> approval[human_approval]
 ```
@@ -206,4 +206,4 @@ flowchart TD
 
 不要上传未经授权的内部、涉密或个人敏感数据。日志不输出完整原文和密钥。
 
-用户分属算法组、框架组、测试组。创建用户时必须选择部门。上传只能进入本部门或公共资料库，不能指定其他部门。文档列表、检索，以及登录后启动的工作流检索，只使用本部门和公共资料库。其他部门的资料不会出现在列表或检索结果里。密码保存为慢哈希，登录令牌只保存摘要。这仍是本地演示账号，不是生产身份认证。
+演示身份分属算法组、框架组、测试组。进入时选择的组就是当前组，公共组固定为 `public`。上传只能进入当前组或公共组。文档列表、检索，以及登录后启动的工作流检索，只使用这两个范围。其他组的资料不会出现在列表或检索结果里。`POST /api/auth/demo` 只用于本地演示，不是生产身份认证。

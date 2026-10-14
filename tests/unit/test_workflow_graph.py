@@ -95,14 +95,19 @@ def test_approve_resume_ends_without_export(monkeypatch):
     assert snapshot.values["review_decision"]["decision"] == "approve"
 
 
-def test_missing_deliverable_pauses_for_clarification(monkeypatch):
+def test_missing_content_pauses_for_clarification(monkeypatch):
     _settings(monkeypatch)
     graph = build_workflow(MemorySaver())
     config = {"configurable": {"thread_id": "thread-missing"}}
-    snapshot_state = _state()
-    snapshot_state["project_snapshot"]["deliverables"] = []
+    snapshot_state = _state(user_request="")
+    snapshot_state["project_snapshot"]["name"] = ""
     snapshot_state["project_snapshot"]["objective"] = ""
+    snapshot_state["project_snapshot"]["background"] = ""
+    snapshot_state["project_snapshot"]["deliverables"] = []
+    snapshot_state["project_snapshot"]["plan_start_date"] = None
+    snapshot_state["project_snapshot"]["plan_end_date"] = None
     graph.invoke(snapshot_state, config)
     snapshot = graph.get_state(config)
     assert snapshot.next == ("human_clarification",)
-    assert "项目目标" in snapshot.values["missing_information"]
+    assert "计划书标题" in snapshot.values["missing_information"]
+    assert "计划书大致内容" in snapshot.values["missing_information"]

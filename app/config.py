@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
     demo_user_id: str = "demo-user"
-    max_revision_rounds: int = Field(default=3, ge=1)
+    max_revision_rounds: int = Field(default=2, ge=1)
     max_upload_bytes: int = Field(default=20 * 1024 * 1024, ge=1)
 
     @property

@@ -12,6 +12,7 @@ from app.api.errors import register_exception_handlers
 from app.api.routes_auth import router as auth_router
 from app.api.routes_documents import router as documents_router
 from app.api.routes_projects import router as projects_router
+from app.api.routes_proposals import router as proposals_router
 from app.api.routes_retrieval import router as retrieval_router
 from app.api.routes_workflows import router as workflows_router
 from app.config import get_settings
@@ -35,6 +36,7 @@ app = FastAPI(title="EnterprisePlan AI", version=__version__, lifespan=lifespan)
 register_exception_handlers(app)
 app.include_router(auth_router)
 app.include_router(projects_router)
+app.include_router(proposals_router)
 app.include_router(documents_router)
 app.include_router(retrieval_router)
 app.include_router(workflows_router)

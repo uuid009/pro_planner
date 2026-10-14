@@ -21,6 +21,27 @@ from app.graph.workflow import get_compiled_graph
 from app.services.artifact_service import persist_approved_exports
 
 
+def start_proposal(
+    db: Session,
+    title: str,
+    content_brief: str,
+    user: User | None = None,
+) -> tuple[Project, WorkflowRun]:
+    """用标题和大致内容创建一次计划书生成。组范围来自当前用户，不从请求里读取。"""
+    project = Project(
+        name=title.strip(),
+        project_type="proposal",
+        objective=content_brief.strip(),
+        background=content_brief.strip(),
+        constraints="",
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    run = start_run(db, project.id, content_brief.strip(), [], user)
+    return project, run
+
+
 def start_run(
     db: Session,
     project_id: UUID,
@@ -268,6 +289,7 @@ def review_snapshot(db: Session, run_id: UUID, user: User | None = None) -> dict
         "sections": [
             {
                 "heading": section.get("heading"),
+                "body": section.get("body") or "",
                 "needs_confirmation": section.get("needs_confirmation"),
                 "evidence_ids": section.get("evidence_ids") or [],
             }
@@ -279,6 +301,10 @@ def review_snapshot(db: Session, run_id: UUID, user: User | None = None) -> dict
                 "title": task.get("title"),
                 "owner_role": task.get("owner_role"),
                 "description": task.get("description"),
+                "start_date": task.get("start_date"),
+                "end_date": task.get("end_date"),
+                "deliverables": task.get("deliverables"),
+                "needs_confirmation": task.get("needs_confirmation"),
             }
             for task in tasks
         ],
@@ -297,6 +323,7 @@ def review_snapshot(db: Session, run_id: UUID, user: User | None = None) -> dict
                 "title": item.get("title"),
                 "page_number": item.get("page_number"),
                 "section": item.get("section"),
+                "quote": item.get("quote") or "",
                 "verification_status": item.get("verification_status"),
             }
             for item in evidence
@@ -311,6 +338,12 @@ def review_snapshot(db: Session, run_id: UUID, user: User | None = None) -> dict
             }
             for item in approvals
         ],
+        "unresolved_items": [
+            section.get("heading")
+            for section in proposal.get("sections") or []
+            if section.get("needs_confirmation")
+        ],
+        "evidence_gaps": ((values.get("evidence_bundle") or {}).get("gaps")) or [],
     }
 
 

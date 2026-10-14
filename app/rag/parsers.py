@@ -5,10 +5,10 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-from openpyxl import load_workbook
 from docx import Document as DocxDocument
 from docx.table import Table
 from docx.text.paragraph import Paragraph
+from openpyxl import load_workbook
 
 from app.api.errors import AppError
 from app.rag.schemas import ParsedBlock
@@ -129,11 +129,7 @@ def _table_blocks(table: Table, section: str | None) -> list[ParsedBlock]:
         if not any(row):
             continue
         if data_rows is not rows and headers:
-            pairs = [
-                f"{header}:{value}"
-                for header, value in zip(headers, row)
-                if value and header
-            ]
+            pairs = [f"{header}:{value}" for header, value in zip(headers, row) if value and header]
             text = "；".join(pairs) if pairs else "；".join(value for value in row if value)
         else:
             text = " | ".join(value for value in row if value)

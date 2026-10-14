@@ -146,4 +146,6 @@ def download_artifact(artifact_id: UUID | str) -> bytes:
 
 
 def compare_artifacts(left_id: UUID | str, right_id: UUID | str) -> dict:
-    return request("GET", "/api/artifacts/compare", params={"left": str(left_id), "right": str(right_id)})
+    return request(
+        "GET", "/api/artifacts/compare", params={"left": str(left_id), "right": str(right_id)}
+    )

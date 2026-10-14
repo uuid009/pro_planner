@@ -71,15 +71,22 @@ def _fix_tasks(tasks: list[dict], brief: dict, feedback: str) -> list[dict]:
     for raw in tasks:
         task = dict(raw)
         if feedback:
-            task["description"] = f"{task.get('description') or ''}\n修订意见：{feedback[:200]}".strip()
+            task["description"] = (
+                f"{task.get('description') or ''}\n修订意见：{feedback[:200]}".strip()
+            )
         if start and end:
             task["start_date"] = start.isoformat()
             task["end_date"] = end.isoformat()
-        if not str(task.get("deliverables") or "").strip() and not str(task.get("acceptance_criteria") or "").strip():
+        if (
+            not str(task.get("deliverables") or "").strip()
+            and not str(task.get("acceptance_criteria") or "").strip()
+        ):
             task["deliverables"] = "待确认交付物"
             task["needs_confirmation"] = True
         owner = str(task.get("owner_role") or "")
-        if owner and not any(marker in owner for marker in ("专责", "经理", "负责人", "工程师", "角色", "组", "岗")):
+        if owner and not any(
+            marker in owner for marker in ("专责", "经理", "负责人", "工程师", "角色", "组", "岗")
+        ):
             task["owner_role"] = "实施专责"
         fixed.append(task)
     return fixed

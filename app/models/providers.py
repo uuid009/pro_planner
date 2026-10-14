@@ -35,8 +35,10 @@ def probe_llm(settings: Settings) -> dict:
         response = httpx.get(llm_models_url(settings), timeout=0.8)
         response.raise_for_status()
         return {"ready": True, "checked": True, "detail": "ok"}
-    except Exception as exc:
-        logger.info("llm_probe_failed provider=%s error=%s", settings.llm_provider, type(exc).__name__)
+    except httpx.HTTPError as exc:
+        logger.info(
+            "llm_probe_failed provider=%s error=%s", settings.llm_provider, type(exc).__name__
+        )
         return {"ready": False, "checked": True, "detail": type(exc).__name__}
 
 
@@ -68,7 +70,7 @@ def chat_complete(
         response = httpx.post(url, json=payload, timeout=120.0)
         response.raise_for_status()
         body = response.json()
-    except Exception as exc:
+    except (httpx.HTTPError, ValueError) as exc:
         raise AppError(503, "llm_unavailable", "本地 LLM 服务不可用") from exc
     choices = body.get("choices") or []
     if not choices:

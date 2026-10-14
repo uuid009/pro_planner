@@ -89,8 +89,7 @@ def lexical_search(
     )
     ts_query = func.plainto_tsquery("simple", query)
     like_clauses = [
-        DocumentChunk.content.ilike(f"%{escape_like(term)}%", escape=LIKE_ESCAPE)
-        for term in terms
+        DocumentChunk.content.ilike(f"%{escape_like(term)}%", escape=LIKE_ESCAPE) for term in terms
     ]
     rank = func.coalesce(func.ts_rank_cd(DocumentChunk.content_tsv, ts_query), 0)
     keyword_hits = literal(0)

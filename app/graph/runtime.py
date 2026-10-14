@@ -41,7 +41,7 @@ def traced(node_name: str, func: Callable[[dict], dict]) -> Callable[[dict], dic
             update = func(state) or {}
         except GraphInterrupt:
             raise
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 单个节点失败要记入状态，不能拖垮整个流程
             duration = _elapsed(started)
             logger.info(
                 "node_failed node=%s error=%s duration_ms=%s",
@@ -79,7 +79,9 @@ def persist_node_events(db: Session, run_id: UUID, events: list[dict]) -> None:
     db.commit()
 
 
-def _event(node_name: str, event_type: str, status: str, duration_ms: int, error: str | None) -> dict:
+def _event(
+    node_name: str, event_type: str, status: str, duration_ms: int, error: str | None
+) -> dict:
     return {
         "node_name": node_name,
         "event_type": event_type,

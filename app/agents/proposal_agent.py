@@ -60,7 +60,9 @@ def _mock_proposal(brief: dict, evidence: list[dict], mock: bool) -> ProposalDoc
     sections = []
     bodies = {
         "项目背景": brief.get("background") or "背景待确认，不能视为已核实事实。",
-        "建设必要性": "必要性需结合证据确认。" if needs_confirmation else "必要性来自已检索材料，仍需人工确认适用范围。",
+        "建设必要性": "必要性需结合证据确认。"
+        if needs_confirmation
+        else "必要性来自已检索材料，仍需人工确认适用范围。",
         "目标": objective,
         "实施内容": "、".join(brief.get("deliverables") or ["待确认实施内容"]),
         "技术路线": "采用本地模型与本地知识库，不连接云端模型。",

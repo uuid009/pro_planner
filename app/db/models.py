@@ -115,7 +115,9 @@ class Document(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
-    library: Mapped[str] = mapped_column(String(32), nullable=False, default="public", server_default="public")
+    library: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="public", server_default="public"
+    )
 
     project: Mapped[Project | None] = relationship(back_populates="documents")
     versions: Mapped[list["DocumentVersion"]] = relationship(back_populates="document")

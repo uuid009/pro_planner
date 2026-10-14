@@ -104,7 +104,9 @@ def test_upload_registers_version_and_rejects_duplicates(client):
     assert second.json()["error"]["code"] == "duplicate_document"
     assert second.json()["error"]["details"]["document_id"] == body["id"]
 
-    listing = client.get("/api/documents", params={"project_id": project["id"], "document_type": "pdf"})
+    listing = client.get(
+        "/api/documents", params={"project_id": project["id"], "document_type": "pdf"}
+    )
     assert listing.status_code == 200
     assert len(listing.json()) == 1
 
@@ -130,11 +132,23 @@ def test_upload_rejects_bad_extension_and_traversal_name(client):
 def test_upload_docx_and_xlsx(client):
     docx = client.post(
         "/api/documents/upload",
-        files={"file": ("计划.docx", _office("word"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
+        files={
+            "file": (
+                "计划.docx",
+                _office("word"),
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            )
+        },
     )
     xlsx = client.post(
         "/api/documents/upload",
-        files={"file": ("任务.xlsx", _office("xl"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                "任务.xlsx",
+                _office("xl"),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     assert docx.status_code == 200, docx.text
     assert xlsx.status_code == 200, xlsx.text
@@ -142,6 +156,8 @@ def test_upload_docx_and_xlsx(client):
 
 
 def test_mismatched_vector_dimension_is_rejected_by_database():
+    from sqlalchemy.exc import DBAPIError
+
     from app.db.models import Document, DocumentChunk, DocumentVersion
     from app.db.session import get_session_factory
 
@@ -175,7 +191,7 @@ def test_mismatched_vector_dimension_is_rejected_by_database():
                 embedding=[0.1, 0.2],
             )
         )
-        with pytest.raises(Exception):
+        with pytest.raises(DBAPIError):
             session.flush()
     finally:
         session.rollback()

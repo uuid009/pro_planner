@@ -1,7 +1,8 @@
+import pytest
+
 from app.api.errors import AppError
 from app.rag.parsers import parse_document
 from tests.helpers import make_docx, make_empty_pdf, make_pdf, make_xlsx
-import pytest
 
 
 def test_pdf_keeps_page_number():

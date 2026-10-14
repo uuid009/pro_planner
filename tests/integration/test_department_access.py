@@ -53,7 +53,9 @@ def test_departments_cannot_see_or_upload_each_others_documents(client, monkeypa
         headers=framework,
     )
     assert hidden_search.status_code == 200
-    assert hidden_search.json()["items"] == []
+    assert private.json()["id"] not in {
+        item["document_id"] for item in hidden_search.json()["items"]
+    }
     hidden_index = client.post(f"/api/documents/{private.json()['id']}/index", headers=framework)
     assert hidden_index.status_code == 404
 

@@ -32,7 +32,9 @@ def test_same_snapshot_does_not_create_another_version(tmp_path, monkeypatch):
         second = persist_approved_snapshot(db, settings, **payload)
         assert first.id == second.id
         count = db.scalar(
-            select(func.count()).select_from(ArtifactVersion).where(ArtifactVersion.run_id == run.id)
+            select(func.count())
+            .select_from(ArtifactVersion)
+            .where(ArtifactVersion.run_id == run.id)
         )
         assert count == 1
         assert db.get(ArtifactVersion, first.id).version_number == 1

@@ -11,7 +11,12 @@ from app.api.errors import AppError
 from app.config import get_settings
 from app.db.models import Project, User
 from app.db.session import get_db
-from app.services.artifact_service import compare_artifacts, get_artifact, list_evidence, list_project_artifacts
+from app.services.artifact_service import (
+    compare_artifacts,
+    get_artifact,
+    list_evidence,
+    list_project_artifacts,
+)
 from app.services.document_service import safe_storage_path
 from app.services.workflow_service import (
     fork_run,

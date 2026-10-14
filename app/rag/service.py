@@ -39,9 +39,9 @@ def index_status_for(chunk_count: int) -> str:
 def count_chunks(db: Session, version_id: UUID) -> int:
     return int(
         db.scalar(
-            select(func.count()).select_from(DocumentChunk).where(
-                DocumentChunk.document_version_id == version_id
-            )
+            select(func.count())
+            .select_from(DocumentChunk)
+            .where(DocumentChunk.document_version_id == version_id)
         )
         or 0
     )
@@ -49,9 +49,7 @@ def count_chunks(db: Session, version_id: UUID) -> int:
 
 def index_document(db: Session, settings: Settings, document_id: UUID) -> dict:
     document = db.scalar(
-        select(Document)
-        .options(selectinload(Document.versions))
-        .where(Document.id == document_id)
+        select(Document).options(selectinload(Document.versions)).where(Document.id == document_id)
     )
     if document is None:
         raise AppError(404, "document_not_found", "文档不存在")
@@ -146,12 +144,10 @@ def hybrid_search(
     vector_scores = {str(chunk.id): score for chunk, score in vector_hits}
     for chunk, _score in lexical_hits + vector_hits:
         chunk_map[str(chunk.id)] = chunk
-    fused_ids = [item_id for item_id, _score in fused[: candidate_limit]]
+    fused_ids = [item_id for item_id, _score in fused[:candidate_limit]]
     missing = [item_id for item_id in fused_ids if item_id not in chunk_map]
     if missing:
-        extra = db.scalars(
-            select(DocumentChunk).where(DocumentChunk.id.in_(missing))
-        ).all()
+        extra = db.scalars(select(DocumentChunk).where(DocumentChunk.id.in_(missing))).all()
         for chunk in extra:
             chunk_map[str(chunk.id)] = chunk
     version_ids = {chunk.document_version_id for chunk in chunk_map.values()}

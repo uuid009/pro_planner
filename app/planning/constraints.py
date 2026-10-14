@@ -18,7 +18,9 @@ def validate_plan_tasks(
     for task in tasks:
         location = f"tasks.{task.task_id or '?'}"
         if not task.title.strip():
-            issues.append(_issue(f"{task.task_id}-title", location, "任务名称不能为空", "补充明确的任务名称"))
+            issues.append(
+                _issue(f"{task.task_id}-title", location, "任务名称不能为空", "补充明确的任务名称")
+            )
         if task.start_date and task.end_date and task.start_date > task.end_date:
             issues.append(
                 _issue(
@@ -65,7 +67,9 @@ def validate_plan_tasks(
                         "去掉对自身的依赖",
                     )
                 )
-        if task.title.strip() and not (task.deliverables.strip() or task.acceptance_criteria.strip()):
+        if task.title.strip() and not (
+            task.deliverables.strip() or task.acceptance_criteria.strip()
+        ):
             issues.append(
                 _issue(
                     f"{task.task_id}-acceptance",
@@ -105,7 +109,7 @@ def parse_iso_date(value: object) -> date | None:
     if isinstance(value, date):
         return value
     if not isinstance(value, str):
-        raise ValueError("日期必须是 ISO 字符串")
+        raise TypeError("日期必须是 ISO 字符串")
     try:
         return date.fromisoformat(value)
     except ValueError as exc:

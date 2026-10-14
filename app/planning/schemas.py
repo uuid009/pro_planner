@@ -83,6 +83,7 @@ class EvidenceBundle(BaseModel):
 
 
 __all__ = [
+    "UUID",
     "AuditIssue",
     "AuditReport",
     "EvidenceBundle",
@@ -93,5 +94,4 @@ __all__ = [
     "ProposalDocument",
     "ProposalSection",
     "ReviewDecision",
-    "UUID",
 ]

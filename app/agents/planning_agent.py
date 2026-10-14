@@ -34,7 +34,11 @@ def generate_plan(state: dict, settings: Settings) -> dict:
         )
     return {
         "plan_tasks": [task.model_dump(mode="json") for task in document.tasks],
-        "model_metadata": {"node": "generate_plan", "mock": document.mock, "task_count": len(document.tasks)},
+        "model_metadata": {
+            "node": "generate_plan",
+            "mock": document.mock,
+            "task_count": len(document.tasks),
+        },
     }
 
 
@@ -42,7 +46,9 @@ def _mock_plan(brief: dict, evidence: list[dict], user_request: str, mock: bool)
     start = parse_iso_date(brief.get("plan_start_date")) or date(2026, 1, 1)
     end = parse_iso_date(brief.get("plan_end_date")) or date(2026, 6, 30)
     midpoint = min(start + timedelta(days=14), end)
-    evidence_ids = [str(item.get("evidence_id")) for item in evidence[:2] if item.get("evidence_id")]
+    evidence_ids = [
+        str(item.get("evidence_id")) for item in evidence[:2] if item.get("evidence_id")
+    ]
     needs_confirmation = not evidence_ids
     second_end = start - timedelta(days=1) if "需要修订" in user_request else end
     tasks = [

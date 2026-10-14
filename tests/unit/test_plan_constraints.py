@@ -31,7 +31,12 @@ def test_valid_plan_has_no_errors():
 def test_rejects_date_order_missing_dependency_and_cycle():
     issues = validate_plan_tasks(
         [
-            _task(task_id="A", end_date=date(2026, 1, 1), start_date=date(2026, 2, 1), dependency_ids=["B"]),
+            _task(
+                task_id="A",
+                end_date=date(2026, 1, 1),
+                start_date=date(2026, 2, 1),
+                dependency_ids=["B"],
+            ),
             _task(task_id="B", dependency_ids=["A"], title="实施"),
         ],
         project_start=date(2026, 1, 1),
@@ -52,7 +57,9 @@ def test_missing_acceptance_is_an_error():
 
 
 def test_unparseable_date_is_not_coerced():
-    loaded = _load_task({"task_id": "T9", "title": "里程碑", "owner_role": "策划专责", "start_date": "下周一"})
+    loaded = _load_task(
+        {"task_id": "T9", "title": "里程碑", "owner_role": "策划专责", "start_date": "下周一"}
+    )
     assert isinstance(loaded, AuditIssue)
     assert "无法解析日期" in loaded.description
 

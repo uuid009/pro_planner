@@ -116,7 +116,9 @@ async def upload_document(
                 "相同内容的文件已存在，未重复入库",
                 {"document_id": str(document.id)},
             )
-        raise AppError(403, "library_forbidden", "相同内容已在其他部门的资料库中，不能上传到别的部门")
+        raise AppError(
+            403, "library_forbidden", "相同内容已在其他部门的资料库中，不能上传到别的部门"
+        )
     loaded = _load_document(db, document.id, user)
     return _to_out(loaded, chunk_count=0)
 

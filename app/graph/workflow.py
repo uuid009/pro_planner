@@ -179,7 +179,9 @@ def _human_approval(state: WorkflowState) -> dict:
             "prompt_version": state.get("prompt_version") or PROMPT_VERSION,
         }
     )
-    decision = answer if isinstance(answer, dict) else {"decision": "revise", "comment": str(answer)}
+    decision = (
+        answer if isinstance(answer, dict) else {"decision": "revise", "comment": str(answer)}
+    )
     kind = decision.get("decision") or "revise"
     if kind == "approve":
         status = "approved_pending_export"

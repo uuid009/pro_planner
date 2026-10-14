@@ -41,7 +41,7 @@ def main() -> None:
             _account()
         except ApiError as exc:
             st.error(f"{exc}（HTTP {exc.status_code}）")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 界面只显示异常类型，避免未处理错误中断页面
             st.error(f"无法连接 API：{type(exc).__name__}")
         return
     user = st.session_state.get("user") or {}
@@ -72,7 +72,7 @@ def main() -> None:
             st.session_state.pop("user", None)
             bind_token(None)
         st.error(f"{exc}（HTTP {exc.status_code}）")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 界面只显示异常类型，避免未处理错误中断页面
         st.error(f"无法连接 API：{type(exc).__name__}")
 
 
@@ -263,7 +263,9 @@ def _history() -> None:
     st.dataframe(checkpoints, hide_index=True)
     if not checkpoints:
         return
-    checkpoint_id = st.selectbox("用于分叉的检查点", [item["checkpoint_id"] for item in checkpoints])
+    checkpoint_id = st.selectbox(
+        "用于分叉的检查点", [item["checkpoint_id"] for item in checkpoints]
+    )
     label = st.text_input("分支名称", value="修订分支")
     request_text = st.text_input("可选的新要求")
     constraints = st.text_input("可选的新约束")
@@ -350,7 +352,8 @@ def _select_run() -> str | None:
         st.info("这个项目还没有运行。")
         return None
     labels = {
-        f"{item['status']} · {item.get('branch_label') or '主运行'} · {item['id']}": item["id"] for item in runs
+        f"{item['status']} · {item.get('branch_label') or '主运行'} · {item['id']}": item["id"]
+        for item in runs
     }
     current = st.session_state.get("run_id")
     options = list(labels)

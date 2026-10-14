@@ -1,6 +1,6 @@
 # pro_planner
 
-本地化企业项目策划与计划编制多智能体平台。Phase 1 到 Phase 5 已可用：上传历史材料、混合检索、生成项目书和任务计划、人工审核后恢复或分叉，并导出 DOCX / XLSX。Phase 5 之后又加了登录和部门资料隔离。Phase 6 的格式检查和文档核对尚未做。
+本地化企业项目策划与计划编制多智能体平台。Phase 1 到 Phase 6 已完成：上传历史材料、混合检索、生成项目书和任务计划、人工审核后恢复或分叉、导出 DOCX / XLSX，以及登录和部门资料隔离。Phase 6 跑过格式检查、静态检查和自动化测试，结果写在下面。
 
 规范来源：`/data/zch/workspace/EnterprisePlan_AI_Cursor_Project_Spec.md`。
 
@@ -25,10 +25,12 @@ API_BASE_URL=http://127.0.0.1:8000 /data/djh/algo_infer/bin/python -m streamlit 
 
 ```bash
 cd /data/zch/workspace/pro_planner
+/data/djh/algo_infer/bin/ruff check .
+/data/djh/algo_infer/bin/ruff format --check .
 /data/djh/algo_infer/bin/python -m pytest
 ```
 
-最近一次：`69 passed`（`algo_infer`，Python 3.11）。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。
+2026-10-14 在 `algo_infer`、Python 3.11.0 上的结果：`ruff check` 与 `ruff format --check` 通过；`69 passed, 1 warning`。那条警告来自 Starlette，提示 TestClient 使用的 `httpx` 接口将要更换，测试本身没有失败。集成测试需要 `.env` 里的 PostgreSQL + pgvector 可用。当时数据库是 PostgreSQL 16.14、pgvector 0.8.2，经 `127.0.0.1:6001` 连接。RAG 与工作流测试把模型提供方设为 `mock`，不加载 BGE、不调用 vLLM。工作流检查点使用真实 PostgreSQL。这套测试覆盖上传索引、可定位检索、计划规则、人工暂停与恢复、修订上限、批准导出，以及分叉不改写父运行产物。仓库里没有单独的人工标注 Recall@K 或 nDCG 数据集，所以上面的数字不是检索排名分数。
 
 本机 CUDA 12.4 的 nvcc 无法编译 FlashInfer sampling（不支持 `--compress-mode`）。启动脚本已设置 `VLLM_USE_FLASHINFER_SAMPLER=0`。
 
@@ -118,7 +120,7 @@ Phase 5 之后增加，不属于原规格阶段：
 
 ## API
 
-已提供：
+交互式接口说明在应用启动后的 `GET /docs`（ReDoc 为 `GET /redoc`）。已提供：
 
 - `GET /health`
 - `POST /api/auth/register`，`POST /api/auth/login`
@@ -143,10 +145,25 @@ Phase 5 之后增加，不属于原规格阶段：
 数据库迁移：
 
 ```bash
+cd /data/zch/workspace/pro_planner
 /data/djh/algo_infer/bin/alembic upgrade head
 ```
 
+## 样例数据
+
+`data/` 里有 20 份虚构演示资料，文件名标明建议资料库：`公共`、`算法组`、`框架组`、`测试组`。这些文件不会在启动时自动入库。上传到对应资料库并索引后，才能被检索。
+
+查看当前库里的用户、表行数和文档片段：
+
+```bash
+/data/djh/algo_infer/bin/python scripts/show_db.py
+```
+
+脚本不打印密码、口令哈希或登录令牌。
+
 ## 架构
+
+技术选择集中在一个进程里：FastAPI 提供接口，LangGraph 固定编排各节点，PostgreSQL 同时保存业务数据和检查点，pgvector 保存 1024 维向量。界面用 Streamlit 调用接口，不直连数据库。这样单人可以本地跑通，也不需要单独的向量库或消息队列。
 
 ```mermaid
 flowchart LR
@@ -162,9 +179,28 @@ flowchart LR
   vllm[vLLM Qwen3.8-27B-FP8] -.->|Phase 3 起用于生成| llm[LLM 网关]
 ```
 
+```mermaid
+flowchart TD
+  analyze[analyze_request] --> missing[check_missing_information]
+  missing -->|缺目标、日期或交付物| clarify[human_clarification]
+  missing --> retrieve[retrieve_evidence]
+  clarify --> retrieve
+  retrieve --> assess[assess_evidence]
+  assess --> proposal[generate_proposal]
+  assess --> plan[generate_plan]
+  proposal --> validate[validate_plan]
+  plan --> validate
+  validate --> audit[audit_output]
+  audit -->|不通过且未满 3 轮| revise[revise_output]
+  revise --> validate
+  audit --> approval[human_approval]
+```
+
 ## 尚未完成
 
-Docker Compose 里的 `ui` 服务会启动上述 Streamlit 入口。本机未安装 Docker，Compose 文件尚未在这里实际启动；容器网络里的模型服务仍按 `ollama` profile 预留。Phase 6 才会做格式检查和更完整的文档核对。
+本机没有 `docker` 命令，`docker-compose.yml` 没有在这里实际启动。文件里已经包含绑定本机回环地址的 PostgreSQL、API、Streamlit，以及可选的 `ollama` profile。容器内访问数据库应使用服务名 `postgres`，不要用 `localhost`。启动 Compose 不会自动下载大模型权重。
+
+仓库里没有界面截图。也没有可计算 Recall@K、nDCG 的标注评测集，不能把自动化测试通过率写成检索效果提升。
 
 ## 隐私
 

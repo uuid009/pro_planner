@@ -41,5 +41,3 @@ def unified_text_diff(left_label: str, left_text: str, right_label: str, right_t
             tofile=right_label,
         )
     )
-
-

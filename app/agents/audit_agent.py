@@ -82,7 +82,9 @@ def audit_output(state: dict, settings: Settings) -> dict:
                     source="llm",
                 )
             )
-    hard_failures = [issue for issue in issues if issue.severity == "error" and issue.source == "rule"]
+    hard_failures = [
+        issue for issue in issues if issue.severity == "error" and issue.source == "rule"
+    ]
     passed = not hard_failures
     limited = int(state.get("revision_count") or 0) >= settings.max_revision_rounds and not passed
     report = AuditReport(issues=issues, passed=passed, mock=settings.llm_mock)

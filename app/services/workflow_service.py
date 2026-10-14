@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from langgraph.errors import GraphInterrupt
@@ -41,7 +41,7 @@ def start_run(
         status="running",
         model_name="mock" if settings.llm_mock else settings.llm_model,
         prompt_version=PROMPT_VERSION,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db.add(run)
     db.commit()
@@ -69,9 +69,11 @@ def start_run(
     except Exception as exc:
         run.status = "failed"
         run.error_summary = type(exc).__name__
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         db.commit()
-        raise AppError(500, "workflow_failed", "工作流执行失败", {"error": type(exc).__name__}) from exc
+        raise AppError(
+            500, "workflow_failed", "工作流执行失败", {"error": type(exc).__name__}
+        ) from exc
     finally:
         unbind_db()
     snapshot = graph.get_state(config)
@@ -80,7 +82,7 @@ def start_run(
     if run.status == "failed":
         errors = (snapshot.values or {}).get("errors") or []
         run.error_summary = "; ".join(errors)[:500] or "failed"
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
     db.commit()
     db.refresh(run)
     return run
@@ -101,7 +103,8 @@ def list_project_runs(db: Session, project_id: UUID, user: User | None = None) -
         stmt = stmt.where(WorkflowRun.owner_department.is_(None))
     else:
         stmt = stmt.where(
-            (WorkflowRun.owner_department.is_(None)) | (WorkflowRun.owner_department == user.department)
+            (WorkflowRun.owner_department.is_(None))
+            | (WorkflowRun.owner_department == user.department)
         )
     return list(db.scalars(stmt.order_by(WorkflowRun.created_at.desc())))
 
@@ -110,7 +113,9 @@ def list_events(db: Session, run_id: UUID, user: User | None = None) -> list[Age
     get_run(db, run_id, user)
     return list(
         db.scalars(
-            select(AgentEvent).where(AgentEvent.run_id == run_id).order_by(AgentEvent.created_at.asc())
+            select(AgentEvent)
+            .where(AgentEvent.run_id == run_id)
+            .order_by(AgentEvent.created_at.asc())
         )
     )
 
@@ -149,7 +154,8 @@ def resume_run(db: Session, run_id: UUID, decision: dict, user: User | None = No
             run_id=run.id,
             proposal=(snapshot.values or {}).get("proposal_draft") or {},
             tasks=(snapshot.values or {}).get("plan_tasks") or [],
-            evidence_items=((snapshot.values or {}).get("evidence_bundle") or {}).get("items") or [],
+            evidence_items=((snapshot.values or {}).get("evidence_bundle") or {}).get("items")
+            or [],
             prompt_version=run.prompt_version,
         )
         approval.artifact_version_id = artifact.id
@@ -213,7 +219,7 @@ def fork_run(
         status="running",
         model_name=parent.model_name,
         prompt_version=parent.prompt_version,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     db.add(child)
     db.commit()
@@ -343,7 +349,9 @@ def _initial_state(
             "background": project.background,
             "constraints": project.constraints,
             "project_type": project.project_type,
-            "plan_start_date": project.plan_start_date.isoformat() if project.plan_start_date else None,
+            "plan_start_date": project.plan_start_date.isoformat()
+            if project.plan_start_date
+            else None,
             "plan_end_date": project.plan_end_date.isoformat() if project.plan_end_date else None,
             "deliverables": deliverables,
         },
@@ -379,16 +387,18 @@ def _invoke(db: Session, graph, payload, config: dict, run: WorkflowRun) -> None
     except Exception as exc:
         run.status = "failed"
         run.error_summary = type(exc).__name__
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
         db.commit()
-        raise AppError(500, "workflow_failed", "工作流执行失败", {"error": type(exc).__name__}) from exc
+        raise AppError(
+            500, "workflow_failed", "工作流执行失败", {"error": type(exc).__name__}
+        ) from exc
     finally:
         unbind_db()
     snapshot = graph.get_state(config)
     _persist_new_events(db, run.id, (snapshot.values or {}).get("node_events") or [])
     run.status = status_from_snapshot(snapshot)
     if run.status in {"approved_pending_export", "option_selected", "failed"}:
-        run.finished_at = datetime.now(timezone.utc)
+        run.finished_at = datetime.now(UTC)
     if run.status == "failed":
         errors = (snapshot.values or {}).get("errors") or []
         run.error_summary = "; ".join(errors)[:500] or "failed"
@@ -397,7 +407,8 @@ def _invoke(db: Session, graph, payload, config: dict, run: WorkflowRun) -> None
 
 def _persist_new_events(db: Session, run_id: UUID, events: list[dict]) -> None:
     existing = int(
-        db.scalar(select(func.count()).select_from(AgentEvent).where(AgentEvent.run_id == run_id)) or 0
+        db.scalar(select(func.count()).select_from(AgentEvent).where(AgentEvent.run_id == run_id))
+        or 0
     )
     persist_node_events(db, run_id, events[existing:])
 
@@ -410,10 +421,17 @@ def _resume_payload(pending: set[str], decision: dict) -> dict:
         return {"information": text, "comment": text}
     kind = str(decision.get("decision") or "")
     if kind not in {"approve", "revise", "request_information", "select_option"}:
-        raise AppError(422, "invalid_decision", "决策必须是 approve、revise、request_information 或 select_option")
+        raise AppError(
+            422,
+            "invalid_decision",
+            "决策必须是 approve、revise、request_information 或 select_option",
+        )
     if kind == "revise" and not str(decision.get("comment") or "").strip():
         raise AppError(422, "comment_required", "退回修订时必须填写意见")
-    if kind == "request_information" and not str(decision.get("information") or decision.get("comment") or "").strip():
+    if (
+        kind == "request_information"
+        and not str(decision.get("information") or decision.get("comment") or "").strip()
+    ):
         raise AppError(422, "information_required", "请求补充信息时必须填写内容")
     if kind == "select_option" and not str(decision.get("selected_option") or "").strip():
         raise AppError(422, "option_required", "选择方案时必须提供选项")

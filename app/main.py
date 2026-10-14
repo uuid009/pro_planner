@@ -46,17 +46,17 @@ def health():
     database = "error"
     pgvector_version = None
     try:
-        with psycopg.connect(settings.database_url, connect_timeout=5) as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT 1")
-                cur.fetchone()
-                cur.execute(
-                    "SELECT extversion FROM pg_extension WHERE extname = 'vector'"
-                )
-                row = cur.fetchone()
-                pgvector_version = row[0] if row else None
+        with (
+            psycopg.connect(settings.database_url, connect_timeout=5) as conn,
+            conn.cursor() as cur,
+        ):
+            cur.execute("SELECT 1")
+            cur.fetchone()
+            cur.execute("SELECT extversion FROM pg_extension WHERE extname = 'vector'")
+            row = cur.fetchone()
+            pgvector_version = row[0] if row else None
         database = "ok"
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 健康检查只暴露异常类型，避免泄露连接信息
         # 只返回异常类型，避免把连接串、密码或 SQL 细节写进响应。
         payload = _health_payload(settings, database, pgvector_version, type(exc).__name__)
         return JSONResponse(status_code=503, content=payload)

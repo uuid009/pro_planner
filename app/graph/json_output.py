@@ -25,7 +25,7 @@ def loads_json_object(text: str) -> dict:
         raise ValueError("模型输出里没有 JSON 对象")
     payload = json.loads(cleaned[start : end + 1])
     if not isinstance(payload, dict):
-        raise ValueError("模型输出不是 JSON 对象")
+        raise TypeError("模型输出不是 JSON 对象")
     return payload
 
 

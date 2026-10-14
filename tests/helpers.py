@@ -23,7 +23,9 @@ def make_empty_pdf() -> bytes:
     return payload
 
 
-def make_docx(*paragraphs: str, heading: str | None = None, table_rows: list[list[str]] | None = None) -> bytes:
+def make_docx(
+    *paragraphs: str, heading: str | None = None, table_rows: list[list[str]] | None = None
+) -> bytes:
     document = Document()
     if heading:
         document.add_heading(heading, level=1)

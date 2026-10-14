@@ -192,15 +192,18 @@ def _store_bytes(
     temporary = target.with_suffix(f"{suffix}.tmp")
     temporary.write_bytes(content)
     temporary.replace(target)
-    version_number = int(
-        db.scalar(
-            select(func.coalesce(func.max(ArtifactVersion.version_number), 0)).where(
-                ArtifactVersion.project_id == project_id,
-                ArtifactVersion.artifact_type == artifact_type,
+    version_number = (
+        int(
+            db.scalar(
+                select(func.coalesce(func.max(ArtifactVersion.version_number), 0)).where(
+                    ArtifactVersion.project_id == project_id,
+                    ArtifactVersion.artifact_type == artifact_type,
+                )
             )
+            or 0
         )
-        or 0
-    ) + 1
+        + 1
+    )
     artifact = ArtifactVersion(
         project_id=project_id,
         run_id=run_id,
@@ -220,7 +223,9 @@ def _store_bytes(
     return artifact
 
 
-def _link_evidence(db: Session, artifact_id: UUID, evidence_items: list[dict], field_path: str) -> None:
+def _link_evidence(
+    db: Session, artifact_id: UUID, evidence_items: list[dict], field_path: str
+) -> None:
     for item in evidence_items:
         db.add(
             EvidenceLink(

@@ -83,8 +83,7 @@ class Settings(BaseSettings):
             raise ValueError("EMBEDDING_DIMENSION 必须为正整数")
         if self.embedding_dimension != SCHEMA_EMBEDDING_DIMENSION:
             raise ValueError(
-                "EMBEDDING_DIMENSION 与数据库向量列维度 "
-                f"{SCHEMA_EMBEDDING_DIMENSION} 不一致"
+                f"EMBEDDING_DIMENSION 与数据库向量列维度 {SCHEMA_EMBEDDING_DIMENSION} 不一致"
             )
         if self.chunk_size <= 0:
             raise ValueError("CHUNK_SIZE 必须为正整数")

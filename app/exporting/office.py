@@ -71,7 +71,9 @@ def build_proposal_docx(
     document.add_heading("任务摘要", level=1)
     table = document.add_table(rows=1, cols=4)
     table.style = "Table Grid"
-    for cell, name in zip(table.rows[0].cells, ("任务编号", "任务名称", "责任角色", "状态"), strict=True):
+    for cell, name in zip(
+        table.rows[0].cells, ("任务编号", "任务名称", "责任角色", "状态"), strict=True
+    ):
         cell.text = name
     for task in tasks:
         row = table.add_row().cells
@@ -169,7 +171,9 @@ def build_plan_xlsx(
             [
                 str(task.get("task_id") or ""),
                 str(task.get("title") or ""),
-                end if end is not None else (str(task.get("end_date")) if task.get("end_date") else None),
+                end
+                if end is not None
+                else (str(task.get("end_date")) if task.get("end_date") else None),
                 str(task.get("deliverables") or ""),
             ]
         )
@@ -184,7 +188,11 @@ def build_plan_xlsx(
     for extra in (milestones, risks):
         extra.freeze_panes = "A2"
         extra.auto_filter.ref = extra.dimensions
-        if extra.max_row >= 2 and extra["C2"].value is not None and isinstance(extra["C2"].value, date):
+        if (
+            extra.max_row >= 2
+            and extra["C2"].value is not None
+            and isinstance(extra["C2"].value, date)
+        ):
             extra["C2"].number_format = "YYYY-MM-DD"
 
     buffer = BytesIO()
@@ -207,7 +215,9 @@ def _mark_unconfirmed(paragraph) -> None:
         run.font.color.rgb = RGBColor(0x9A, 0x34, 0x00)
 
 
-def _citation_index(sections: list[dict], tasks: list[dict], evidence_items: list[dict]) -> dict[str, dict]:
+def _citation_index(
+    sections: list[dict], tasks: list[dict], evidence_items: list[dict]
+) -> dict[str, dict]:
     by_id: dict[str, dict] = {}
     for item in evidence_items:
         for key in (item.get("evidence_id"), item.get("chunk_id")):
@@ -223,7 +233,10 @@ def _citation_index(sections: list[dict], tasks: list[dict], evidence_items: lis
             if token and token not in seen:
                 seen.add(token)
                 ordered.append(token)
-    return {token: {"number": index, "item": by_id.get(token)} for index, token in enumerate(ordered, start=1)}
+    return {
+        token: {"number": index, "item": by_id.get(token)}
+        for index, token in enumerate(ordered, start=1)
+    }
 
 
 def _marks(evidence_ids: list, citations: dict[str, dict]) -> str:

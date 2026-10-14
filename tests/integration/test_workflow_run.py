@@ -64,7 +64,9 @@ def test_run_revision_loop_is_visible(client, monkeypatch):
     )
     assert created.status_code == 201, created.text
     assert created.json()["status"] == "awaiting_review"
-    names = {item["node_name"] for item in client.get(f"/api/runs/{created.json()['id']}/events").json()}
+    names = {
+        item["node_name"] for item in client.get(f"/api/runs/{created.json()['id']}/events").json()
+    }
     assert "revise_output" in names
     assert "validate_plan" in names
 

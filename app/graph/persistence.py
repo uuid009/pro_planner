@@ -33,7 +33,7 @@ def init_checkpointer(database_url: str) -> None:
             conn.execute("SELECT 1")
         _ready_error = None
         logger.info("langgraph_checkpointer_ready")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 检查点初始化失败不能阻止应用启动
         _ready_error = type(exc).__name__
         logger.info("langgraph_checkpointer_init_failed error=%s", type(exc).__name__)
         close_checkpointer()
@@ -61,5 +61,5 @@ def checkpointer_status() -> dict:
         with _pool.connection() as conn:
             conn.execute("SELECT 1")
         return {"ready": True, "error": None}
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 状态查询只返回异常类型
         return {"ready": False, "error": type(exc).__name__}

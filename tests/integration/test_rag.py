@@ -64,7 +64,9 @@ def test_index_and_hybrid_search_returns_traceable_evidence(client, monkeypatch)
     assert first["document_id"] == document_id
     assert first["chunk_id"]
     assert first["title"] == "方案.docx"
-    assert "一期系统上线" in first["quote"] or any("一期系统上线" in item["quote"] for item in items)
+    assert "一期系统上线" in first["quote"] or any(
+        "一期系统上线" in item["quote"] for item in items
+    )
     assert first["verification_status"] in {"supported", "needs_review"}
     assert first["validity_status"] == "active"
 
@@ -75,7 +77,13 @@ def test_search_respects_project_filter_and_empty_query(client, monkeypatch):
     right = client.post("/api/projects", json=_project_payload("右侧")).json()
     left_doc = client.post(
         "/api/documents/upload",
-        files={"file": ("left.pdf", make_pdf("左侧独有证据：防洪堤加固工期不得虚构"), "application/pdf")},
+        files={
+            "file": (
+                "left.pdf",
+                make_pdf("左侧独有证据：防洪堤加固工期不得虚构"),
+                "application/pdf",
+            )
+        },
         data={"project_id": left["id"]},
     ).json()
     right_doc = client.post(
@@ -103,7 +111,9 @@ def test_index_pdf_xlsx_and_reject_unreadable_pdf(client, monkeypatch):
     _use_mock_embeddings(monkeypatch)
     pdf = client.post(
         "/api/documents/upload",
-        files={"file": ("制度.pdf", make_pdf("制度条款：不得凭空编造预算和人员。"), "application/pdf")},
+        files={
+            "file": ("制度.pdf", make_pdf("制度条款：不得凭空编造预算和人员。"), "application/pdf")
+        },
     )
     xlsx = client.post(
         "/api/documents/upload",

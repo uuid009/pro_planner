@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -44,7 +44,7 @@ def login_user(db: Session, username: str, password: str) -> tuple[User, str]:
 def user_from_token(db: Session, token: str) -> User:
     digest = hashlib.sha256(token.encode("utf-8")).hexdigest()
     session = db.scalar(select(AuthSession).where(AuthSession.token_hash == digest))
-    if session is None or session.expires_at <= datetime.now(timezone.utc):
+    if session is None or session.expires_at <= datetime.now(UTC):
         raise AppError(401, "login_required", "请先登录")
     user = db.get(User, session.user_id)
     if user is None:
@@ -54,7 +54,9 @@ def user_from_token(db: Session, token: str) -> User:
 
 def hash_password(password: str) -> str:
     salt = secrets.token_hex(16)
-    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("ascii"), PASSWORD_ROUNDS)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt.encode("ascii"), PASSWORD_ROUNDS
+    )
     return f"pbkdf2_sha256${PASSWORD_ROUNDS}${salt}${digest.hex()}"
 
 
@@ -80,7 +82,7 @@ def _issue_token(db: Session, user: User) -> str:
         AuthSession(
             user_id=user.id,
             token_hash=hashlib.sha256(token.encode("utf-8")).hexdigest(),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
+            expires_at=datetime.now(UTC) + timedelta(days=SESSION_DAYS),
         )
     )
     db.commit()

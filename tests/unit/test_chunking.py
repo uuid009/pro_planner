@@ -18,7 +18,9 @@ def _settings(**overrides) -> Settings:
 def test_chunking_keeps_headings_and_table_rows():
     blocks = [
         ParsedBlock(text="项目背景", section="项目背景", block_type="heading"),
-        ParsedBlock(text="现有台账分散，需要统一编制流程。", section="项目背景", block_type="paragraph"),
+        ParsedBlock(
+            text="现有台账分散，需要统一编制流程。", section="项目背景", block_type="paragraph"
+        ),
         ParsedBlock(
             text="表头: 任务 | 验收。任务:台账迁移；验收:可检索",
             section="实施内容",

@@ -32,7 +32,9 @@ def _artifacts(client, project_id: str) -> list[dict]:
 
 
 def _one(rows: list[dict], artifact_type: str, run_id: str) -> dict:
-    matches = [item for item in rows if item["artifact_type"] == artifact_type and item["run_id"] == run_id]
+    matches = [
+        item for item in rows if item["artifact_type"] == artifact_type and item["run_id"] == run_id
+    ]
     assert len(matches) == 1, rows
     return matches[0]
 
